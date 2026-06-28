@@ -37,7 +37,7 @@ jobs:
 
       # Project page is served from /<repo>/, so assets need that base prefix.
       - name: Build
-        run: bunx vite build --base=/hublinator/
+        run: bunx vite build --base=/re_form/
 
       - name: Configure Pages
         uses: actions/configure-pages@v5
