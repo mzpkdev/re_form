@@ -112,10 +112,10 @@ const AssistantMessage = ({ text, timestamp, actioning, complete }: Message & { 
             <div className="flex size-8 shrink-0 items-center justify-center border border-primary bg-primary/10 chamfer-tr">
                 <Bot className="size-4 text-primary" />
             </div>
-            <div>
+            <div className="min-w-0">
                 <div
                     className={cn(
-                        "border border-on-surface/10 bg-surface-container-low p-3 text-mono-data leading-relaxed text-on-surface chamfer-tr",
+                        "border border-on-surface/10 bg-surface-container-low p-3 text-mono-data leading-relaxed break-words text-on-surface chamfer-tr",
                         actioning && "border-l-2 border-l-primary"
                     )}
                 >
