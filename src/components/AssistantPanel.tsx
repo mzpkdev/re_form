@@ -10,6 +10,7 @@ import type { Transform, Vec3 } from "../lib/model"
 import { getManifold, setManifold } from "../lib/modelStore"
 import { type ChatMessage, streamChat, type ToolCall, type ToolDef } from "../lib/openrouter"
 import { buildSculpt, SCULPT_TOOL, type SculptScene } from "../lib/sculpt"
+import { Markdown } from "./Markdown"
 import { Typewriter } from "./Typewriter"
 
 type Message = {
@@ -101,24 +102,34 @@ const buildSystemMessage = (): ChatMessage => ({
 
 const formatTime = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 
-const AssistantMessage = ({ text, timestamp, actioning }: Message) => (
-    <div className="message-in flex gap-3">
-        <div className="flex size-8 shrink-0 items-center justify-center border border-primary bg-primary/10 chamfer-tr">
-            <Bot className="size-4 text-primary" />
-        </div>
-        <div>
-            <div
-                className={cn(
-                    "border border-on-surface/10 bg-surface-container-low p-3 text-mono-data leading-relaxed text-on-surface chamfer-tr",
-                    actioning && "border-l-2 border-l-primary"
-                )}
-            >
-                <Typewriter text={text} />
+const AssistantMessage = ({ text, timestamp, actioning, complete }: Message & { complete: boolean }) => {
+    // Type the raw source while streaming; once the message has both finished
+    // streaming (`complete`) and finished typing (`onDone`), swap to rendered
+    // Markdown. We never render Markdown mid-stream — only after settle.
+    const [revealed, setRevealed] = useState(false)
+    return (
+        <div className="message-in flex gap-3">
+            <div className="flex size-8 shrink-0 items-center justify-center border border-primary bg-primary/10 chamfer-tr">
+                <Bot className="size-4 text-primary" />
             </div>
-            {timestamp ? <div className="mt-1 font-mono text-tiny text-tertiary">{timestamp}</div> : null}
+            <div>
+                <div
+                    className={cn(
+                        "border border-on-surface/10 bg-surface-container-low p-3 text-mono-data leading-relaxed text-on-surface chamfer-tr",
+                        actioning && "border-l-2 border-l-primary"
+                    )}
+                >
+                    {complete && revealed ? (
+                        <Markdown>{text}</Markdown>
+                    ) : (
+                        <Typewriter text={text} onDone={complete ? () => setRevealed(true) : undefined} />
+                    )}
+                </div>
+                {timestamp ? <div className="mt-1 font-mono text-tiny text-tertiary">{timestamp}</div> : null}
+            </div>
         </div>
-    </div>
-)
+    )
+}
 
 const UserMessage = ({ text, timestamp }: Message) => (
     <div className="message-in flex flex-row-reverse gap-3">
@@ -352,7 +363,13 @@ export const AssistantPanel = ({
                         }
                         // Until the first delta lands the reply is empty — the TypingIndicator
                         // stands in for it, so don't also render an empty assistant bubble.
-                        return message.text ? <AssistantMessage key={message.id} {...message} /> : null
+                        // `complete`: while the turn is pending only the still-streaming final
+                        // bubble is incomplete (intermediate ones are already `actioning`);
+                        // once it settles `isPending` is false so all are complete.
+                        const complete = !chat.isPending || !!message.actioning
+                        return message.text ? (
+                            <AssistantMessage key={message.id} {...message} complete={complete} />
+                        ) : null
                     })}
                     {showTyping ? <TypingIndicator /> : null}
                 </div>
