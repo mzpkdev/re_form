@@ -8,7 +8,7 @@ const contentSecurityPolicy = [
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",
     "font-src 'self'",
-    "connect-src 'self'",
+    "connect-src 'self' https://openrouter.ai https://api.openai.com",
     "object-src 'none'",
     "base-uri 'self'",
     "form-action 'self'"
