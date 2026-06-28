@@ -1,0 +1,5 @@
+# Manifold CSG operations in the functional e2e suite legitimately take several
+# seconds each (the open hollow-tube build is ~8-9s on CI), so the 5s per-test
+# default is too tight. Raise it repo-wide so local `bun test` and CI agree.
+[test]
+timeout = 20000
