@@ -8,9 +8,31 @@ const stub = () => {
     console.debug("TopBar action stub")
 }
 
-export const TopBar = ({ view, onNavigate }: { view: View; onNavigate: (view: View) => void }) => {
+export const TopBar = ({
+    view,
+    onNavigate,
+    onImport
+}: {
+    view: View
+    onNavigate: (view: View) => void
+    onImport: (file: File) => void
+}) => {
     const [fileMenuOpen, setFileMenuOpen] = useState(false)
     const fileRef = useRef<HTMLDivElement>(null)
+    const inputRef = useRef<HTMLInputElement>(null)
+
+    const openImport = () => inputRef.current?.click()
+
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "i") {
+                event.preventDefault()
+                inputRef.current?.click()
+            }
+        }
+        document.addEventListener("keydown", onKeyDown)
+        return () => document.removeEventListener("keydown", onKeyDown)
+    }, [])
 
     useEffect(() => {
         if (!fileMenuOpen) {
@@ -41,6 +63,19 @@ export const TopBar = ({ view, onNavigate }: { view: View; onNavigate: (view: Vi
 
     return (
         <header className="flex h-toolbar items-center justify-between border-b border-on-surface/10 bg-surface px-6 text-on-surface">
+            <input
+                ref={inputRef}
+                type="file"
+                accept=".stl,model/stl"
+                className="hidden"
+                onChange={(event) => {
+                    const file = event.target.files?.[0]
+                    if (file) {
+                        onImport(file)
+                    }
+                    event.target.value = ""
+                }}
+            />
             <div className="flex items-center gap-8">
                 <h1 className="font-mono text-2xl font-bold uppercase tracking-tighter text-on-surface">
                     RE_FORM_V1.0
@@ -65,7 +100,7 @@ export const TopBar = ({ view, onNavigate }: { view: View; onNavigate: (view: Vi
                             <div className="absolute left-0 top-full z-50 mt-2.5 w-62 border border-on-surface/20 bg-surface-container-lowest py-2 drop-shadow-2xl">
                                 <button
                                     type="button"
-                                    onClick={closeAfter(stub)}
+                                    onClick={closeAfter(openImport)}
                                     className="flex w-full items-center gap-3 px-4 py-2 text-sm text-on-surface transition-colors hover:bg-surface-container hover:text-primary"
                                 >
                                     <Upload className="size-4" />

@@ -1,5 +1,6 @@
 import type { ManifoldToplevel, Mesh } from "manifold-3d"
-import * as THREE from "three"
+import type * as THREE from "three"
+import { meshToBufferGeometry } from "./model"
 
 export class Widget {
     private constructor(
@@ -27,17 +28,6 @@ export class Widget {
     }
 
     toBufferGeometry(): THREE.BufferGeometry {
-        const geometry = new THREE.BufferGeometry()
-        const stride = this.mesh.numProp
-        const positions = new Float32Array(this.mesh.numVert * 3)
-        for (let i = 0; i < this.mesh.numVert; i++) {
-            positions[i * 3 + 0] = this.mesh.vertProperties[i * stride + 0]
-            positions[i * 3 + 1] = this.mesh.vertProperties[i * stride + 1]
-            positions[i * 3 + 2] = this.mesh.vertProperties[i * stride + 2]
-        }
-        geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3))
-        geometry.setIndex(new THREE.BufferAttribute(this.mesh.triVerts, 1))
-        geometry.computeVertexNormals()
-        return geometry
+        return meshToBufferGeometry(this.mesh)
     }
 }
