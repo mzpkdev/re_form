@@ -1,0 +1,198 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>RE_FORM - Settings</title>
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/gh/reallygoodsoftware/tailwind-lite@9327a589cd1273e85ed2e609727dd8bca919cd54/dist/2.0.1.css" rel="stylesheet">
+<link href="./index.css" rel="stylesheet">
+</head>
+<body class="bg-background text-on-background h-screen w-screen overflow-hidden flex flex-col font-body-lg">
+<main class="flex-1 flex h-full w-full relative">
+<!-- Left section nav -->
+<aside class="fixed left-0 top-0 h-full z-40 flex flex-col w-sidebar-width bg-surface border-r border-on-surface/10">
+<div class="p-6 border-b border-on-surface/10 bg-primary">
+<div class="font-label-caps text-label-caps uppercase tracking-widest text-on-primary/70 mb-1">SYSTEM</div>
+<h2 class="font-headline-lg text-[20px] font-semibold text-on-primary">SETTINGS</h2>
+</div>
+<nav class="flex-1 py-4 flex flex-col gap-2">
+<a class="nav-item is-active flex items-center gap-4 px-6 py-4 text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all duration-300 ease-in-out font-label-caps text-label-caps" data-section="ai" href="#">
+<span class="material-symbols-outlined text-[20px]">smart_toy</span>AI Assistant
+</a>
+<a class="nav-item flex items-center gap-4 px-6 py-4 text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all duration-300 ease-in-out font-label-caps text-label-caps" data-section="appearance" href="#">
+<span class="material-symbols-outlined text-[20px]">palette</span>Appearance
+</a>
+<a class="nav-item flex items-center gap-4 px-6 py-4 text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all duration-300 ease-in-out font-label-caps text-label-caps" data-section="editor" href="#">
+<span class="material-symbols-outlined text-[20px]">tune</span>Editor Defaults
+</a>
+<a class="nav-item flex items-center gap-4 px-6 py-4 text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all duration-300 ease-in-out font-label-caps text-label-caps" data-section="privacy" href="#">
+<span class="material-symbols-outlined text-[20px]">shield</span>Privacy &amp; Data
+</a>
+<a class="nav-item flex items-center gap-4 px-6 py-4 text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all duration-300 ease-in-out font-label-caps text-label-caps" data-section="about" href="#">
+<span class="material-symbols-outlined text-[20px]">info</span>About
+</a>
+</nav>
+<div class="p-6 border-t border-on-surface/10 font-mono-data text-[11px] text-tertiary">Changes auto-save locally</div>
+</aside>
+<!-- Right content -->
+<section class="flex-1 ml-[280px] h-full overflow-y-auto" style="scroll-behavior:smooth;">
+<div style="max-width:720px; margin:0 auto;" class="p-6 flex flex-col gap-8">
+
+<!-- AI Assistant -->
+<div id="ai" class="flex flex-col gap-4">
+<div>
+<h3 class="font-headline-lg text-[20px] font-semibold text-on-surface">AI Assistant</h3>
+<p class="text-body-sm font-body-sm text-tertiary mt-1">Connect a model provider to power the in-editor assistant.</p>
+</div>
+<div class="flex flex-col gap-2">
+<span class="text-body-sm font-body-sm text-on-surface">API key</span>
+<div class="flex items-center gap-2">
+<div class="flex-1"><input id="api-key" type="password" class="field-input" placeholder="sk-ant-api03-…"></div>
+<button id="api-toggle" class="w-10 h-10 flex items-center justify-center text-tertiary hover:text-on-surface border border-on-surface/20"><span class="material-symbols-outlined text-[18px]">visibility</span></button>
+</div>
+<div class="flex items-center justify-between gap-3">
+<span id="api-status" class="font-mono-data text-[11px] text-tertiary">Stored locally in your browser — never sent to our servers.</span>
+<button id="api-test" class="font-label-caps text-label-caps text-primary border border-primary px-3 py-1 hover:bg-surface-container transition-colors flex-shrink-0">Test connection</button>
+</div>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Provider</span>
+<select class="field-select"><option selected>Anthropic (Claude)</option><option>OpenAI</option><option>Local / Ollama</option></select>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Model</span>
+<select class="field-select"><option selected>Claude Opus 4.8</option><option>Claude Sonnet 4.6</option><option>Claude Haiku 4.5</option></select>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Auto-suggest mesh repairs</span>
+<label class="switch"><input checked type="checkbox"><span class="switch-track"></span></label>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Stream responses</span>
+<label class="switch"><input checked type="checkbox"><span class="switch-track"></span></label>
+</div>
+</div>
+
+<!-- Appearance -->
+<div id="appearance" class="flex flex-col gap-4">
+<h3 class="font-headline-lg text-[20px] font-semibold text-on-surface">Appearance</h3>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Theme</span>
+<div class="flex border border-on-surface/20 text-label-caps font-label-caps">
+<button class="px-3 py-1 bg-primary/10 text-primary">Light</button>
+<button class="px-3 py-1 text-on-surface-variant hover:text-primary border-l border-on-surface/20">Dark</button>
+<button class="px-3 py-1 text-on-surface-variant hover:text-primary border-l border-on-surface/20">System</button>
+</div>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Accent color</span>
+<div class="flex items-center gap-3">
+<button class="swatch is-selected" data-accent="#ec6530" style="background:#ec6530;"></button>
+<button class="swatch" data-accent="#2f6fed" style="background:#2f6fed;"></button>
+<button class="swatch" data-accent="#1f9d57" style="background:#1f9d57;"></button>
+<button class="swatch" data-accent="#7a4ddb" style="background:#7a4ddb;"></button>
+<button class="swatch" data-accent="#e0443e" style="background:#e0443e;"></button>
+</div>
+</div>
+</div>
+
+<!-- Editor Defaults -->
+<div id="editor" class="flex flex-col gap-4">
+<h3 class="font-headline-lg text-[20px] font-semibold text-on-surface">Editor Defaults</h3>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Default units</span>
+<div class="flex border border-on-surface/20 text-label-caps font-label-caps">
+<button class="px-3 py-1 bg-primary/10 text-primary">mm</button>
+<button class="px-3 py-1 text-on-surface-variant hover:text-primary border-l border-on-surface/20">cm</button>
+<button class="px-3 py-1 text-on-surface-variant hover:text-primary border-l border-on-surface/20">in</button>
+</div>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Default grid size</span>
+<select class="field-select"><option>5 mm</option><option selected>10 mm</option><option>20 mm</option></select>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Autosave</span>
+<label class="switch"><input checked type="checkbox"><span class="switch-track"></span></label>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Autosave interval</span>
+<select class="field-select"><option>1 min</option><option selected>5 min</option><option>15 min</option></select>
+</div>
+</div>
+
+<!-- Privacy -->
+<div id="privacy" class="flex flex-col gap-4">
+<h3 class="font-headline-lg text-[20px] font-semibold text-on-surface">Privacy &amp; Data</h3>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Send anonymous usage analytics</span>
+<label class="switch"><input type="checkbox"><span class="switch-track"></span></label>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Automatic crash reports</span>
+<label class="switch"><input checked type="checkbox"><span class="switch-track"></span></label>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Local cache · 128 MB</span>
+<button class="font-label-caps text-label-caps text-on-surface-variant border border-on-surface/20 px-3 py-1 hover:border-primary hover:text-primary transition-colors">Clear cache</button>
+</div>
+</div>
+
+<!-- About -->
+<div id="about" class="flex flex-col gap-4">
+<h3 class="font-headline-lg text-[20px] font-semibold text-on-surface">About</h3>
+<div class="flex flex-col gap-3 font-mono-data text-mono-data text-on-surface">
+<div class="flex items-center justify-between"><span class="text-tertiary">Application</span><span>RE_FORM v1.0</span></div>
+<div class="flex items-center justify-between"><span class="text-tertiary">Geometry engine</span><span>manifold-3d (WASM)</span></div>
+<div class="flex items-center justify-between"><span class="text-tertiary">Renderer</span><span>three.js</span></div>
+</div>
+<div class="grid-3 gap-2">
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">description</span><span class="font-label-caps text-label-caps">Docs</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">history_edu</span><span class="font-label-caps text-label-caps">Changelog</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">code</span><span class="font-label-caps text-label-caps">Source</span></button>
+</div>
+</div>
+
+</div>
+</section>
+</main>
+<script>
+(function () {
+  var navLinks = document.querySelectorAll("[data-section]");
+  navLinks.forEach(function (l) {
+    l.addEventListener("click", function (e) {
+      e.preventDefault();
+      var el = document.getElementById(l.getAttribute("data-section"));
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      navLinks.forEach(function (x) { x.classList.toggle("is-active", x === l); });
+    });
+  });
+  var key = document.getElementById("api-key");
+  var toggle = document.getElementById("api-toggle");
+  toggle.addEventListener("click", function () {
+    var hidden = key.type === "password";
+    key.type = hidden ? "text" : "password";
+    toggle.querySelector("span").textContent = hidden ? "visibility_off" : "visibility";
+  });
+  var test = document.getElementById("api-test");
+  var status = document.getElementById("api-status");
+  test.addEventListener("click", function () {
+    status.textContent = "Testing…";
+    status.style.color = "var(--color-tertiary)";
+    setTimeout(function () {
+      status.textContent = key.value.trim() ? "✓ Connection OK" : "Enter an API key first";
+      status.style.color = "var(--color-primary)";
+    }, 600);
+  });
+  var swatches = document.querySelectorAll("[data-accent]");
+  swatches.forEach(function (s) {
+    s.addEventListener("click", function () {
+      document.documentElement.style.setProperty("--color-primary", s.getAttribute("data-accent"));
+      swatches.forEach(function (x) { x.classList.toggle("is-selected", x === s); });
+    });
+  });
+})();
+</script>
+</body></html>

@@ -1,0 +1,94 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>RE_FORM</title>
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/gh/reallygoodsoftware/tailwind-lite@9327a589cd1273e85ed2e609727dd8bca919cd54/dist/2.0.1.css" rel="stylesheet">
+<link href="./index.css" rel="stylesheet">
+</head>
+<body class="bg-background text-on-background h-screen w-screen overflow-hidden flex flex-col font-body-lg">
+<!-- TopAppBar (shell — drives the iframe below) -->
+<header class="flex-shrink-0 flex justify-between items-center px-container-padding h-toolbar-width bg-surface border-b border-on-surface/10 text-on-surface">
+<div class="flex items-center gap-8">
+<h1 class="font-display-lg text-[24px] font-bold text-on-surface uppercase tracking-tighter">RE_FORM_V1.0</h1>
+<nav class="hidden md:flex items-center gap-6">
+<div class="relative">
+<button id="file-btn" class="flex items-center gap-1 text-on-surface-variant font-medium hover:text-primary transition-colors duration-200 text-title-md font-title-md text-[14px]">File<span class="material-symbols-outlined text-[18px]">expand_more</span></button>
+<div id="file-menu" class="is-hidden absolute left-0 bg-surface-container-lowest border border-on-surface/20 drop-shadow-2xl py-2 z-50" style="top:calc(100% + 10px); width:248px;">
+<button id="file-import" class="w-full flex items-center gap-3 px-4 py-2 text-body-sm font-body-sm text-on-surface hover:bg-surface-container hover:text-primary transition-colors"><span class="material-symbols-outlined text-[18px]">upload_file</span>Import STL…<span class="ml-auto font-mono-data text-[11px] text-tertiary">⌘I</span></button>
+<button data-open-editor class="w-full flex items-center gap-3 px-4 py-2 text-body-sm font-body-sm text-on-surface hover:bg-surface-container hover:text-primary transition-colors"><span class="material-symbols-outlined text-[18px]">add</span>New project<span class="ml-auto font-mono-data text-[11px] text-tertiary">⌘N</span></button>
+<div class="my-2 border-t border-on-surface/10"></div>
+<div class="px-4 py-1 font-label-caps text-label-caps uppercase tracking-widest text-tertiary">Recent</div>
+<button data-open-editor class="w-full flex items-center gap-3 px-4 py-2 text-body-sm font-body-sm text-on-surface hover:bg-surface-container hover:text-primary transition-colors"><span class="material-symbols-outlined text-[18px]">history</span>X-PHENOM_v2</button>
+<button data-open-editor class="w-full flex items-center gap-3 px-4 py-2 text-body-sm font-body-sm text-on-surface hover:bg-surface-container hover:text-primary transition-colors"><span class="material-symbols-outlined text-[18px]">history</span>THRUST_NOZZLE</button>
+<div class="my-2 border-t border-on-surface/10"></div>
+<button class="w-full flex items-center gap-3 px-4 py-2 text-body-sm font-body-sm text-on-surface hover:bg-surface-container hover:text-primary transition-colors"><span class="material-symbols-outlined text-[18px]">save</span>Save<span class="ml-auto font-mono-data text-[11px] text-tertiary">⌘S</span></button>
+<button class="w-full flex items-center gap-3 px-4 py-2 text-body-sm font-body-sm text-on-surface hover:bg-surface-container hover:text-primary transition-colors"><span class="material-symbols-outlined text-[18px]">download</span>Export STL…<span class="ml-auto font-mono-data text-[11px] text-tertiary">⌘E</span></button>
+<div class="my-2 border-t border-on-surface/10"></div>
+<button data-open-settings class="w-full flex items-center gap-3 px-4 py-2 text-body-sm font-body-sm text-on-surface hover:bg-surface-container hover:text-primary transition-colors"><span class="material-symbols-outlined text-[18px]">settings</span>Settings<span class="ml-auto font-mono-data text-[11px] text-tertiary">⌘,</span></button>
+<input id="stl-input" type="file" accept=".stl,model/stl" class="is-hidden">
+</div>
+</div>
+<a class="nav-link text-title-md font-title-md text-[14px]" data-view="projects.html" href="#">Projects</a>
+<a class="nav-link is-active text-title-md font-title-md text-[14px]" data-view="editor.html" href="#">Editor</a>
+</nav>
+</div>
+<div class="flex items-center gap-4">
+<button class="text-on-surface hover:text-primary transition-colors duration-200 active:opacity-80"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">notifications</span></button>
+<button id="cog-btn" class="text-on-surface hover:text-primary transition-colors duration-200 active:opacity-80"><span class="material-symbols-outlined" style="font-variation-settings: 'FILL' 0;">settings</span></button>
+</div>
+</header>
+<iframe id="view" class="flex-1 w-full border-0" src="editor.html" title="RE_FORM workspace"></iframe>
+<script>
+(function () {
+  var frame = document.getElementById("view");
+  var links = document.querySelectorAll(".nav-link[data-view]");
+  var cog = document.getElementById("cog-btn");
+  function go(view) {
+    frame.setAttribute("src", view);
+    links.forEach(function (l) { l.classList.toggle("is-active", l.getAttribute("data-view") === view); });
+    cog.classList.toggle("text-primary", view === "settings.html");
+  }
+  links.forEach(function (l) {
+    l.addEventListener("click", function (e) { e.preventDefault(); go(l.getAttribute("data-view")); });
+  });
+  cog.addEventListener("click", function () { go("settings.html"); });
+  document.querySelectorAll("[data-open-settings]").forEach(function (el) {
+    el.addEventListener("click", function () { go("settings.html"); });
+  });
+  // Best-effort: if the iframe navigates internally (e.g. "Open in Editor"),
+  // sync the active nav. Reading the iframe location can throw on file:// — ignore.
+  frame.addEventListener("load", function () {
+    try {
+      var p = frame.contentWindow.location.pathname;
+      var file = p.substring(p.lastIndexOf("/") + 1);
+      if (file) {
+        links.forEach(function (l) { l.classList.toggle("is-active", l.getAttribute("data-view") === file); });
+        cog.classList.toggle("text-primary", file === "settings.html");
+      }
+    } catch (e) {}
+  });
+
+  // FILE dropdown menu
+  var fileBtn = document.getElementById("file-btn");
+  var fileMenu = document.getElementById("file-menu");
+  var stlInput = document.getElementById("stl-input");
+  function closeMenu() { fileMenu.classList.add("is-hidden"); }
+  fileBtn.addEventListener("click", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    fileMenu.classList.toggle("is-hidden");
+  });
+  document.addEventListener("click", closeMenu);
+  document.addEventListener("keydown", function (e) { if (e.key === "Escape") closeMenu(); });
+  document.getElementById("file-import").addEventListener("click", function () { stlInput.click(); });
+  stlInput.addEventListener("change", function () { if (stlInput.files.length) go("editor.html"); });
+  document.querySelectorAll("[data-open-editor]").forEach(function (el) {
+    el.addEventListener("click", function () { go("editor.html"); });
+  });
+})();
+</script>
+</body></html>

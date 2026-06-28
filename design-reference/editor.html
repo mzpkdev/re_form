@@ -1,0 +1,366 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>RE_FORM - 3D Workspace</title>
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/gh/reallygoodsoftware/tailwind-lite@9327a589cd1273e85ed2e609727dd8bca919cd54/dist/2.0.1.css" rel="stylesheet">
+<link href="./index.css" rel="stylesheet">
+</head>
+<body class="bg-background text-on-background h-screen w-screen overflow-hidden flex flex-col font-body-lg">
+<!-- Main Workspace -->
+<main class="flex-1 flex h-full w-full relative">
+<!-- Left SideNavBar (Tools) -->
+<aside class="fixed left-0 top-0 h-full z-40 flex flex-col w-sidebar-width bg-surface border-r border-on-surface/10 flat no shadows">
+<div class="p-6 border-b border-on-surface/10 bg-primary">
+<div class="font-label-caps text-label-caps uppercase tracking-widest text-on-primary/70 mb-1">EDITOR</div>
+<h2 class="font-headline-lg text-[20px] font-semibold text-on-primary">PROJECT_NAME</h2>
+</div>
+<nav class="flex-1 py-4 flex flex-col gap-2">
+<a class="nav-item flex items-center gap-4 px-6 py-4 text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all duration-300 ease-in-out font-label-caps text-label-caps" data-panel="tools" href="#">
+<span class="material-symbols-outlined text-[20px]">build</span>
+                    Tools
+                </a>
+<a class="nav-item is-active flex items-center gap-4 px-6 py-4 text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all duration-300 ease-in-out font-label-caps text-label-caps" data-panel="ai" href="#">
+<span class="material-symbols-outlined text-[20px]">smart_toy</span>
+                    AI Assistant
+                </a>
+</nav>
+<a class="nav-item flex items-center gap-4 px-6 py-4 mt-auto border-t border-on-surface/10 text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all duration-300 ease-in-out cursor-pointer font-label-caps text-label-caps" data-panel="settings" href="#">
+<span class="material-symbols-outlined text-[18px]">settings</span>
+                    Settings
+                </a>
+<div class="p-6 border-t border-on-surface/10">
+<button class="w-full bg-primary text-on-primary font-label-caps text-label-caps py-3 chamfer hover:bg-primary-container hover:text-on-primary-container transition-colors border border-transparent hover:border-on-surface">
+                    EXPORT_STL
+                </button>
+</div>
+</aside>
+<!-- Center 3D Viewport -->
+<section id="viewport" class="flex-1 ml-[280px] mr-[360px] relative bg-3d-grid h-full flex items-center justify-center overflow-hidden">
+<!-- 3D Drone Placeholder -->
+<div class="w-full h-full absolute inset-0 flex items-center justify-center p-12">
+<img alt="3D Model Viewer" class="max-w-full max-h-full object-contain drop-shadow-2xl opacity-90" data-alt="An architectural STL model rendered on a transparent background." src="https://wallpapers.com/images/hd/architectural-stl-models-png-kps92-jshb0mj1ua7d8xhp.png">
+</div>
+<!-- Viewport HUD Overlay -->
+<div class="absolute top-6 left-6 flex flex-col gap-2 z-10">
+<div class="bg-surface/80 backdrop-blur-md border border-on-surface text-on-surface font-mono-data text-mono-data px-3 py-1 chamfer-tr inline-flex">
+                    CAM_PERSPECTIVE
+                </div>
+<div class="font-mono-data text-[11px] text-tertiary">
+                    ZOOM: 145%<br>GRID: 10MM
+                </div>
+</div>
+<!-- Contextual Tool Overlay -->
+<div class="absolute bottom-6 left-1/2 transform -translate-x-1/2 z-10 flex gap-2 bg-surface/90 backdrop-blur-md p-2 border border-on-surface/10 chamfer">
+<button class="w-10 h-10 flex items-center justify-center text-on-surface hover:text-primary bg-surface border border-transparent hover:border-primary transition-all rounded-sm"><span class="material-symbols-outlined text-[20px]">pan_tool</span></button>
+<button class="w-10 h-10 flex items-center justify-center text-primary bg-primary/10 border border-primary transition-all rounded-sm"><span class="material-symbols-outlined text-[20px]">3d_rotation</span></button>
+<button class="w-10 h-10 flex items-center justify-center text-on-surface hover:text-primary bg-surface border border-transparent hover:border-primary transition-all rounded-sm"><span class="material-symbols-outlined text-[20px]">zoom_in</span></button>
+</div>
+<!-- Action Chip -->
+<div class="absolute top-1/2 right-1/4 transform translate-x-1/2 -translate-y-1/2 z-10 flex items-center gap-2">
+<div class="w-2 h-2 rounded-full bg-primary animate-pulse"></div>
+<div class="font-mono-data text-[12px] border border-on-surface px-2 py-0.5 text-on-surface bg-surface/50 backdrop-blur-sm">
+                    VERTEX: X:120.5 Y:44.2 Z:-10.0
+                </div>
+</div>
+</section>
+<!-- Right AI Assistant Panel -->
+<aside id="panel-ai" class="fixed right-0 top-0 h-full z-40 w-[360px] bg-surface border-l border-on-surface/10 flex flex-col">
+<div class="p-4 border-b border-on-surface/10 flex justify-between items-center bg-surface-container-low">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">smart_toy</span>
+<h3 class="font-title-md text-title-md text-on-surface">AI ASSISTANT</h3>
+</div>
+<button data-close class="text-tertiary hover:text-on-surface"><span class="material-symbols-outlined text-[18px]">close</span></button>
+</div>
+<!-- Message History -->
+<div class="flex-1 overflow-y-auto p-4 flex flex-col gap-6 font-body-sm text-body-sm">
+<!-- System Message -->
+<div class="flex gap-3">
+<div class="w-8 h-8 rounded-none border border-primary bg-primary/10 flex items-center justify-center flex-shrink-0 chamfer-tr">
+<span class="material-symbols-outlined text-primary text-[16px]">smart_toy</span>
+</div>
+<div>
+<div class="text-on-surface bg-surface-container-low border border-on-surface/10 p-3 chamfer-tr text-[13px] leading-relaxed">
+                            Model X-PHENOM_v2 loaded successfully. Topology scan indicates 2 non-manifold edges. Would you like me to highlight them or auto-repair?
+                        </div>
+<div class="text-tertiary text-[11px] mt-1 font-mono-data">SYS_LOG - 10:42 AM</div>
+</div>
+</div>
+<!-- User Message -->
+<div class="flex gap-3 flex-row-reverse">
+<div class="w-8 h-8 rounded-full bg-inverse-surface flex items-center justify-center flex-shrink-0">
+<span class="material-symbols-outlined text-surface text-[16px]">person</span>
+</div>
+<div class="flex flex-col items-end">
+<div class="text-on-secondary bg-inverse-surface p-3 chamfer text-[13px] leading-relaxed">
+                            Highlight them for manual inspection. Then scale the central thrust nozzle by 1.15 along the Z axis.
+                        </div>
+<div class="text-tertiary text-[11px] mt-1 font-mono-data">USER - 10:44 AM</div>
+</div>
+</div>
+<!-- System Message Actioning -->
+<div class="flex gap-3">
+<div class="w-8 h-8 rounded-none border border-primary bg-primary/10 flex items-center justify-center flex-shrink-0 chamfer-tr">
+<span class="material-symbols-outlined text-primary text-[16px]">smart_toy</span>
+</div>
+<div>
+<div class="text-on-surface bg-surface-container-low border border-on-surface/10 p-3 chamfer-tr text-[13px] leading-relaxed border-l-2 border-l-primary">
+                            Executing... Non-manifold edges highlighted in viewport. Adjusting scale matrix for selection group 'Thrust_Nozzle_Center'.
+                        </div>
+</div>
+</div>
+</div>
+<!-- Input Area -->
+<div class="p-4 border-t border-on-surface/10 bg-surface">
+<div class="relative flex items-end gap-2">
+<textarea class="w-full bg-surface-container-low border-0 border-b-2 border-on-surface focus:ring-0 focus:border-primary focus:bg-surface transition-colors resize-none py-3 px-3 font-body-sm text-on-surface placeholder-tertiary rounded-none h-14" placeholder="Enter command or query..."></textarea>
+<button class="h-14 w-14 bg-primary text-on-primary flex items-center justify-center flex-shrink-0 chamfer hover:bg-primary-container transition-colors shadow-sm">
+<span class="material-symbols-outlined text-[20px]">send</span>
+</button>
+</div>
+<div class="flex gap-2 mt-3">
+<button class="text-[11px] font-mono-data text-tertiary border border-tertiary/30 px-2 py-1 hover:bg-surface-container hover:text-on-surface transition-colors">/analyze</button>
+<button class="text-[11px] font-mono-data text-tertiary border border-tertiary/30 px-2 py-1 hover:bg-surface-container hover:text-on-surface transition-colors">/optimize</button>
+</div>
+</div>
+</aside>
+<!-- Right Tools Panel -->
+<aside id="panel-tools" class="is-hidden fixed right-0 top-0 h-full z-40 w-[360px] bg-surface border-l border-on-surface/10 flex flex-col">
+<div class="p-4 border-b border-on-surface/10 flex justify-between items-center bg-surface-container-low">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">build</span>
+<h3 class="font-title-md text-title-md text-on-surface">TOOLS</h3>
+</div>
+<button data-close class="text-tertiary hover:text-on-surface"><span class="material-symbols-outlined text-[18px]">close</span></button>
+</div>
+<div class="flex-1 overflow-y-auto p-6 flex flex-col gap-8">
+<!-- Transform -->
+<div class="flex flex-col gap-4">
+<div class="font-label-caps text-label-caps uppercase tracking-widest text-tertiary">Transform</div>
+<div class="flex flex-col gap-2">
+<span class="text-body-sm font-body-sm text-on-surface">Position</span>
+<div class="flex gap-2">
+<div class="flex-1 flex items-center gap-1"><span class="font-mono-data text-[11px] text-tertiary">X</span><input class="field-num" type="text" value="120.5"></div>
+<div class="flex-1 flex items-center gap-1"><span class="font-mono-data text-[11px] text-tertiary">Y</span><input class="field-num" type="text" value="44.2"></div>
+<div class="flex-1 flex items-center gap-1"><span class="font-mono-data text-[11px] text-tertiary">Z</span><input class="field-num" type="text" value="-10.0"></div>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<span class="text-body-sm font-body-sm text-on-surface">Rotation</span>
+<div class="flex gap-2">
+<div class="flex-1 flex items-center gap-1"><span class="font-mono-data text-[11px] text-tertiary">X</span><input class="field-num" type="text" value="0"></div>
+<div class="flex-1 flex items-center gap-1"><span class="font-mono-data text-[11px] text-tertiary">Y</span><input class="field-num" type="text" value="0"></div>
+<div class="flex-1 flex items-center gap-1"><span class="font-mono-data text-[11px] text-tertiary">Z</span><input class="field-num" type="text" value="0"></div>
+</div>
+</div>
+<div class="flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<span class="text-body-sm font-body-sm text-on-surface">Scale</span>
+<button class="text-primary" title="Uniform scale"><span class="material-symbols-outlined text-[16px]">link</span></button>
+</div>
+<div class="flex gap-2">
+<div class="flex-1 flex items-center gap-1"><span class="font-mono-data text-[11px] text-tertiary">X</span><input class="field-num" type="text" value="1.15"></div>
+<div class="flex-1 flex items-center gap-1"><span class="font-mono-data text-[11px] text-tertiary">Y</span><input class="field-num" type="text" value="1.00"></div>
+<div class="flex-1 flex items-center gap-1"><span class="font-mono-data text-[11px] text-tertiary">Z</span><input class="field-num" type="text" value="1.00"></div>
+</div>
+</div>
+</div>
+<!-- Add primitive -->
+<div class="flex flex-col gap-4">
+<div class="font-label-caps text-label-caps uppercase tracking-widest text-tertiary">Add primitive</div>
+<div class="grid-3 gap-2">
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">deployed_code</span><span class="font-label-caps text-label-caps">Cube</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">circle</span><span class="font-label-caps text-label-caps">Sphere</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">database</span><span class="font-label-caps text-label-caps">Cylinder</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">change_history</span><span class="font-label-caps text-label-caps">Cone</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">donut_large</span><span class="font-label-caps text-label-caps">Torus</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">crop_square</span><span class="font-label-caps text-label-caps">Plane</span></button>
+</div>
+</div>
+<!-- Boolean -->
+<div class="flex flex-col gap-4">
+<div class="font-label-caps text-label-caps uppercase tracking-widest text-tertiary">Boolean</div>
+<div class="grid-3 gap-2">
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">join_full</span><span class="font-label-caps text-label-caps">Union</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">join_left</span><span class="font-label-caps text-label-caps">Subtract</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">join_inner</span><span class="font-label-caps text-label-caps">Intersect</span></button>
+</div>
+</div>
+<!-- Modifiers -->
+<div class="flex flex-col gap-4">
+<div class="font-label-caps text-label-caps uppercase tracking-widest text-tertiary">Modifiers</div>
+<div class="grid-3 gap-2">
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">flip</span><span class="font-label-caps text-label-caps">Mirror</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">grid_view</span><span class="font-label-caps text-label-caps">Array</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">rounded_corner</span><span class="font-label-caps text-label-caps">Bevel</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">compress</span><span class="font-label-caps text-label-caps">Simplify</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">grid_on</span><span class="font-label-caps text-label-caps">Subdivide</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">blur_on</span><span class="font-label-caps text-label-caps">Smooth</span></button>
+</div>
+</div>
+</div>
+</aside>
+<!-- Right Settings Panel -->
+<aside id="panel-settings" class="is-hidden fixed right-0 top-0 h-full z-40 w-[360px] bg-surface border-l border-on-surface/10 flex flex-col">
+<div class="p-4 border-b border-on-surface/10 flex justify-between items-center bg-surface-container-low">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">tune</span>
+<h3 class="font-title-md text-title-md text-on-surface">SETTINGS</h3>
+</div>
+<button data-close class="text-tertiary hover:text-on-surface"><span class="material-symbols-outlined text-[18px]">close</span></button>
+</div>
+<div class="flex-1 overflow-y-auto p-6 flex flex-col gap-8">
+<!-- Grid & snap -->
+<div class="flex flex-col gap-4">
+<div class="font-label-caps text-label-caps uppercase tracking-widest text-tertiary">Grid &amp; snap</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Grid size</span>
+<select class="field-select">
+<option>5 mm</option>
+<option selected>10 mm</option>
+<option>20 mm</option>
+<option>50 mm</option>
+</select>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Snap to grid</span>
+<label class="switch"><input checked type="checkbox"><span class="switch-track"></span></label>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Snap increment</span>
+<select class="field-select">
+<option>1 mm</option>
+<option selected>5 mm</option>
+<option>10 mm</option>
+</select>
+</div>
+</div>
+<!-- Units & precision -->
+<div class="flex flex-col gap-4">
+<div class="font-label-caps text-label-caps uppercase tracking-widest text-tertiary">Units &amp; precision</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Units</span>
+<div class="flex border border-on-surface/20 text-label-caps font-label-caps">
+<button class="px-3 py-1 bg-primary/10 text-primary">mm</button>
+<button class="px-3 py-1 text-on-surface-variant hover:text-primary border-l border-on-surface/20">cm</button>
+<button class="px-3 py-1 text-on-surface-variant hover:text-primary border-l border-on-surface/20">in</button>
+</div>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Decimals</span>
+<select class="field-select">
+<option>0</option>
+<option>1</option>
+<option selected>2</option>
+<option>3</option>
+</select>
+</div>
+</div>
+<!-- Display -->
+<div class="flex flex-col gap-4">
+<div class="font-label-caps text-label-caps uppercase tracking-widest text-tertiary">Display</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Projection</span>
+<div class="flex border border-on-surface/20 text-label-caps font-label-caps">
+<button class="px-3 py-1 bg-primary/10 text-primary">Persp</button>
+<button class="px-3 py-1 text-on-surface-variant hover:text-primary border-l border-on-surface/20">Ortho</button>
+</div>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Shading</span>
+<div class="flex border border-on-surface/20 text-label-caps font-label-caps">
+<button class="px-3 py-1 bg-primary/10 text-primary">Shaded</button>
+<button class="px-3 py-1 text-on-surface-variant hover:text-primary border-l border-on-surface/20">Wire</button>
+</div>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Show grid</span>
+<label class="switch"><input checked type="checkbox"><span class="switch-track"></span></label>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Show axes</span>
+<label class="switch"><input checked type="checkbox"><span class="switch-track"></span></label>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Origin gizmo</span>
+<label class="switch"><input type="checkbox"><span class="switch-track"></span></label>
+</div>
+</div>
+<!-- Geometry -->
+<div class="flex flex-col gap-4">
+<div class="font-label-caps text-label-caps uppercase tracking-widest text-tertiary">Geometry</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">CSG resolution</span>
+<select class="field-select">
+<option>Low</option>
+<option selected>Medium</option>
+<option>High</option>
+</select>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Auto-repair non-manifold</span>
+<label class="switch"><input checked type="checkbox"><span class="switch-track"></span></label>
+</div>
+</div>
+<!-- Export defaults -->
+<div class="flex flex-col gap-4">
+<div class="font-label-caps text-label-caps uppercase tracking-widest text-tertiary">Export defaults</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">STL format</span>
+<div class="flex border border-on-surface/20 text-label-caps font-label-caps">
+<button class="px-3 py-1 bg-primary/10 text-primary">Binary</button>
+<button class="px-3 py-1 text-on-surface-variant hover:text-primary border-l border-on-surface/20">ASCII</button>
+</div>
+</div>
+<div class="flex items-center justify-between gap-4">
+<span class="text-body-sm font-body-sm text-on-surface">Export scale</span>
+<select class="field-select">
+<option selected>1×</option>
+<option>0.5×</option>
+<option>2×</option>
+</select>
+</div>
+</div>
+</div>
+</aside>
+</main>
+
+
+<script>
+(function () {
+  var panels = {
+    ai: document.getElementById("panel-ai"),
+    tools: document.getElementById("panel-tools"),
+    settings: document.getElementById("panel-settings"),
+  };
+  var viewport = document.getElementById("viewport");
+  function render(name) {
+    Object.keys(panels).forEach(function (key) {
+      panels[key].classList.toggle("is-hidden", key !== name);
+    });
+    document.querySelectorAll("[data-panel]").forEach(function (el) {
+      el.classList.toggle("is-active", el.getAttribute("data-panel") === name);
+    });
+    viewport.classList.toggle("mr-[360px]", name !== null);
+  }
+  document.querySelectorAll("[data-panel]").forEach(function (el) {
+    el.addEventListener("click", function (e) {
+      e.preventDefault();
+      render(el.getAttribute("data-panel"));
+    });
+  });
+  document.querySelectorAll("[data-close]").forEach(function (el) {
+    el.addEventListener("click", function (e) {
+      e.preventDefault();
+      render(null);
+    });
+  });
+  render("ai");
+})();
+</script>
+</body></html>

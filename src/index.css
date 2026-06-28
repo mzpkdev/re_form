@@ -1,20 +1,165 @@
 @import "tailwindcss";
 
+/* =============================================================================
+   VERTEX CORE — design system (Tailwind v4)
+   Material-3 color set, type scale, named layout rails, and the cyber
+   chamfer/grid utilities. Translated from design-reference/index.css.
+   Color hex values are copied verbatim from the prototype.
+   ========================================================================== */
+
 @theme {
-    --color-surface: #0b0e14;
-    --color-surface-raised: #11161f;
-    --color-border: #1c2230;
-    --color-foreground: #e6e9ef;
-    --color-muted: #97a0b3;
-    --color-accent: #4f9dff;
-    --color-accent-foreground: #06080d;
-    --color-danger: #f87171;
-    --radius-control: 0.5rem;
-    --container-page: 60rem;
+    /* ---- Color · Primary ---- */
+    --color-primary: #ec6530;
+    --color-on-primary: #ffffff;
+    --color-primary-container: #f18c65;
+    --color-on-primary-container: #572000;
+
+    /* ---- Color · Secondary / Tertiary ---- */
+    --color-on-secondary: #ffffff;
+    --color-tertiary: #5d5e60;
+
+    /* ---- Color · Surface & background ---- */
+    --color-background: #faf9fe;
+    --color-on-background: #1a1b1f;
+    --color-surface: #faf9fe;
+    --color-on-surface: #1a1b1f;
+    --color-surface-variant: #e3e2e7;
+    --color-on-surface-variant: #5a4136;
+    --color-surface-container: #eeedf3;
+    --color-surface-container-low: #f4f3f8;
+    --color-surface-container-lowest: #ffffff;
+    --color-inverse-surface: #2f3034;
+
+    /* ---- Typeface ---- */
+    /* Leads with the family names @fontsource-variable registers. */
+    --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+    --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+
+    /* ---- Type scale (size + paired line-height) ---- */
+    --text-title-md: 18px;
+    --text-title-md--line-height: 1.4;
+    --text-label-caps: 12px;
+    --text-label-caps--line-height: 1;
+    --text-mono-data: 13px;
+    --text-mono-data--line-height: 1;
+    --text-body-sm: 14px;
+    --text-body-sm--line-height: 1.5;
+    /* One-off size the prototype uses with no Tailwind default (11px). */
+    --text-tiny: 11px;
+    --text-tiny--line-height: 1;
+
+    /* ---- Motion · easing (never linear — snappy decel, no overshoot) ---- */
+    --ease-snappy: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* src/design/* components use the `checked:` variant; Tailwind errors on
+   unknown variants found in scanned files, so this must stay declared. */
 @custom-variant checked (&:is([data-state="checked"], [data-state="indeterminate"]));
 
-@utility h-viewport {
-    height: 60vh;
+/* Interactive elements signal interactivity with a pointer cursor. */
+@layer base {
+    button:not(:disabled) {
+        cursor: pointer;
+    }
+}
+
+/* -----------------------------------------------------------------------------
+   Layout rails — named widths/heights (no arbitrary values in the app).
+   -------------------------------------------------------------------------- */
+@utility w-sidebar {
+    width: 280px;
+}
+@utility w-panel {
+    width: 360px;
+}
+@utility h-toolbar {
+    height: 64px;
+}
+@utility max-w-settings {
+    max-width: 45rem;
+}
+
+/* -----------------------------------------------------------------------------
+   Component utilities — copied from the prototype.
+   -------------------------------------------------------------------------- */
+@utility chamfer {
+    --chamfer-size: 8px;
+    clip-path: polygon(
+        var(--chamfer-size) 0,
+        100% 0,
+        100% calc(100% - var(--chamfer-size)),
+        calc(100% - var(--chamfer-size)) 100%,
+        0 100%,
+        0 var(--chamfer-size)
+    );
+}
+@utility chamfer-tr {
+    --chamfer-size: 8px;
+    clip-path: polygon(
+        0 0,
+        calc(100% - var(--chamfer-size)) 0,
+        100% var(--chamfer-size),
+        100% 100%,
+        0 100%
+    );
+}
+@utility bg-3d-grid {
+    --grid-cell: 40px;
+    --grid-line: color-mix(in srgb, var(--color-on-surface) 5%, transparent);
+    background-size: var(--grid-cell) var(--grid-cell);
+    background-image:
+        linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+        linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+}
+
+/* -----------------------------------------------------------------------------
+   AI "working on a response" typing indicator — staggered bouncing dots.
+   -------------------------------------------------------------------------- */
+@keyframes typing-bounce {
+    0%,
+    80%,
+    100% {
+        transform: translateY(0);
+        opacity: 0.35;
+    }
+    40% {
+        transform: translateY(-4px);
+        opacity: 1;
+    }
+}
+.typing-dots {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.typing-dots > span {
+    width: 6px;
+    height: 6px;
+    border-radius: 9999px;
+    background-color: var(--color-tertiary);
+    animation: typing-bounce 1.2s infinite ease-in-out;
+}
+.typing-dots > span:nth-child(2) {
+    animation-delay: 0.15s;
+}
+.typing-dots > span:nth-child(3) {
+    animation-delay: 0.3s;
+}
+
+/* -----------------------------------------------------------------------------
+   Message entrance — new chat messages pop in (slide-up + fade + subtle scale).
+   Lands exactly at scale 1 (no overshoot/bounce), matching the panel easing.
+   -------------------------------------------------------------------------- */
+@keyframes message-in {
+    from {
+        opacity: 0;
+        transform: translateY(10px) scale(0.96);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+.message-in {
+    animation: message-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
 }

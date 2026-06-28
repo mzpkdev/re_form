@@ -1,0 +1,280 @@
+<!DOCTYPE html><html class="light" lang="en"><head>
+<meta charset="utf-8">
+<meta content="width=device-width, initial-scale=1.0" name="viewport">
+<title>RE_FORM - Projects</title>
+<link href="https://fonts.googleapis.com" rel="preconnect">
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&amp;family=JetBrains+Mono:wght@400;500;600;700&amp;display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&amp;display=swap" rel="stylesheet">
+<link href="https://cdn.jsdelivr.net/gh/reallygoodsoftware/tailwind-lite@9327a589cd1273e85ed2e609727dd8bca919cd54/dist/2.0.1.css" rel="stylesheet">
+<link href="./index.css" rel="stylesheet">
+</head>
+<body class="bg-background text-on-background h-screen w-screen overflow-hidden flex flex-col font-body-lg">
+<!-- Main -->
+<main class="flex-1 flex h-full w-full relative">
+<!-- Left Library Rail -->
+<aside class="fixed left-0 top-0 h-full z-40 flex flex-col w-sidebar-width bg-surface border-r border-on-surface/10">
+<div class="p-6 border-b border-on-surface/10 bg-primary">
+<div class="font-label-caps text-label-caps uppercase tracking-widest text-on-primary/70 mb-1">LIBRARY</div>
+<h2 class="font-headline-lg text-[20px] font-semibold text-on-primary">PROJECTS</h2>
+</div>
+<nav class="flex-1 py-4 flex flex-col gap-2">
+<a class="nav-item is-active flex items-center justify-between px-6 py-4 text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all duration-300 ease-in-out font-label-caps text-label-caps" href="#">
+<span class="flex items-center gap-4"><span class="material-symbols-outlined text-[20px]">folder_open</span>All projects</span>
+<span class="font-mono-data text-[11px] text-tertiary">9</span>
+</a>
+<a class="nav-item flex items-center justify-between px-6 py-4 text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all duration-300 ease-in-out font-label-caps text-label-caps" href="#">
+<span class="flex items-center gap-4"><span class="material-symbols-outlined text-[20px]">history</span>Recent</span>
+<span class="font-mono-data text-[11px] text-tertiary">3</span>
+</a>
+<a class="nav-item flex items-center justify-between px-6 py-4 text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all duration-300 ease-in-out font-label-caps text-label-caps" href="#">
+<span class="flex items-center gap-4"><span class="material-symbols-outlined text-[20px]">star</span>Starred</span>
+<span class="font-mono-data text-[11px] text-tertiary">2</span>
+</a>
+<a class="nav-item flex items-center justify-between px-6 py-4 text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all duration-300 ease-in-out font-label-caps text-label-caps" href="#">
+<span class="flex items-center gap-4"><span class="material-symbols-outlined text-[20px]">category</span>Templates</span>
+<span class="font-mono-data text-[11px] text-tertiary">4</span>
+</a>
+<a class="nav-item flex items-center justify-between px-6 py-4 text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all duration-300 ease-in-out font-label-caps text-label-caps" href="#">
+<span class="flex items-center gap-4"><span class="material-symbols-outlined text-[20px]">inventory_2</span>Archived</span>
+<span class="font-mono-data text-[11px] text-tertiary">1</span>
+</a>
+</nav>
+<a class="flex items-center gap-4 px-6 py-4 border-t border-on-surface/10 text-on-surface-variant hover:bg-surface-container hover:text-primary transition-all cursor-pointer font-label-caps text-label-caps" href="#">
+<span class="material-symbols-outlined text-[18px]">settings</span>Settings
+</a>
+<div class="p-6 border-t border-on-surface/10">
+<button class="w-full bg-primary text-on-primary font-label-caps text-label-caps py-3 chamfer hover:bg-primary-container hover:text-on-primary-container transition-colors border border-transparent hover:border-on-surface flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">upload_file</span>IMPORT_STL
+</button>
+</div>
+</aside>
+<!-- Gallery -->
+<section id="gallery" class="flex-1 ml-[280px] h-full flex flex-col transition-all duration-300">
+<!-- Toolbar -->
+<div class="border-b border-on-surface/10 bg-surface px-6 py-4 flex items-center justify-between gap-4">
+<div class="flex items-center gap-3">
+<h2 class="font-headline-lg text-[20px] font-semibold text-on-surface">All projects</h2>
+<span class="font-mono-data text-mono-data text-tertiary">9 LOADED</span>
+</div>
+<div class="flex items-center gap-3">
+<div class="flex items-center gap-2 bg-surface-container-low border-b-2 border-on-surface px-3 py-2" style="width:240px;">
+<span class="material-symbols-outlined text-[18px] text-tertiary">search</span>
+<input class="bg-transparent border-0 focus:ring-0 text-on-surface placeholder-tertiary font-body-sm text-body-sm w-full" placeholder="Search projects...">
+</div>
+<select class="field-select">
+<option>Recent</option>
+<option>Name</option>
+<option>Size</option>
+<option>Modified</option>
+</select>
+<div class="flex border border-on-surface/20">
+<button class="w-10 h-10 flex items-center justify-center bg-primary/10 text-primary"><span class="material-symbols-outlined text-[18px]">grid_view</span></button>
+<button class="w-10 h-10 flex items-center justify-center text-on-surface-variant hover:text-primary border-l border-on-surface/20"><span class="material-symbols-outlined text-[18px]">view_list</span></button>
+</div>
+</div>
+</div>
+<!-- Card grid -->
+<div class="flex-1 overflow-y-auto p-6">
+<div class="grid-cards gap-4">
+
+<div class="project-card" tabindex="0" data-project data-name="X-PHENOM_v2" data-modified="2h ago" data-size="4.2 MB" data-tris="248,150" data-status="2 non-manifold edges" data-icon="deployed_code">
+<div class="card-thumb bg-3d-grid flex items-center justify-center relative">
+<span class="material-symbols-outlined text-tertiary" style="font-size:48px;">deployed_code</span>
+<span class="absolute top-2 right-2 w-2 h-2 rounded-full bg-primary animate-pulse"></span>
+</div>
+<div class="p-4 flex flex-col gap-1 border-t border-on-surface/10">
+<div class="flex items-center justify-between gap-2">
+<span class="font-title-md text-[14px] text-on-surface">X-PHENOM_v2</span>
+<span class="material-symbols-outlined text-[16px] text-tertiary">more_vert</span>
+</div>
+<div class="font-mono-data text-[11px] text-tertiary">2h ago · 4.2 MB</div>
+</div>
+</div>
+
+<div class="project-card" tabindex="0" data-project data-name="THRUST_NOZZLE" data-modified="Yesterday" data-size="1.8 MB" data-tris="96,400" data-status="Ready" data-icon="change_history">
+<div class="card-thumb bg-3d-grid flex items-center justify-center relative">
+<span class="material-symbols-outlined text-tertiary" style="font-size:48px;">change_history</span>
+</div>
+<div class="p-4 flex flex-col gap-1 border-t border-on-surface/10">
+<div class="flex items-center justify-between gap-2">
+<span class="font-title-md text-[14px] text-on-surface">THRUST_NOZZLE</span>
+<span class="material-symbols-outlined text-[16px] text-tertiary">more_vert</span>
+</div>
+<div class="font-mono-data text-[11px] text-tertiary">Yesterday · 1.8 MB</div>
+</div>
+</div>
+
+<div class="project-card" tabindex="0" data-project data-name="HULL_FRAME_A7" data-modified="3 days ago" data-size="12.6 MB" data-tris="1,204,880" data-status="Ready" data-icon="view_in_ar">
+<div class="card-thumb bg-3d-grid flex items-center justify-center relative">
+<span class="material-symbols-outlined text-tertiary" style="font-size:48px;">view_in_ar</span>
+</div>
+<div class="p-4 flex flex-col gap-1 border-t border-on-surface/10">
+<div class="flex items-center justify-between gap-2">
+<span class="font-title-md text-[14px] text-on-surface">HULL_FRAME_A7</span>
+<span class="material-symbols-outlined text-[16px] text-tertiary">more_vert</span>
+</div>
+<div class="font-mono-data text-[11px] text-tertiary">3 days ago · 12.6 MB</div>
+</div>
+</div>
+
+<div class="project-card" tabindex="0" data-project data-name="GEAR_HOUSING" data-modified="1 week ago" data-size="5.1 MB" data-tris="312,000" data-status="Ready" data-icon="settings">
+<div class="card-thumb bg-3d-grid flex items-center justify-center relative">
+<span class="material-symbols-outlined text-tertiary" style="font-size:48px;">settings</span>
+</div>
+<div class="p-4 flex flex-col gap-1 border-t border-on-surface/10">
+<div class="flex items-center justify-between gap-2">
+<span class="font-title-md text-[14px] text-on-surface">GEAR_HOUSING</span>
+<span class="material-symbols-outlined text-[16px] text-tertiary">more_vert</span>
+</div>
+<div class="font-mono-data text-[11px] text-tertiary">1 week ago · 5.1 MB</div>
+</div>
+</div>
+
+<div class="project-card" tabindex="0" data-project data-name="DRONE_ARM_L" data-modified="2 weeks ago" data-size="2.3 MB" data-tris="142,500" data-status="Draft" data-icon="precision_manufacturing">
+<div class="card-thumb bg-3d-grid flex items-center justify-center relative">
+<span class="material-symbols-outlined text-tertiary" style="font-size:48px;">precision_manufacturing</span>
+<span class="absolute top-2 right-2 font-mono-data text-[10px] text-tertiary border border-on-surface/20 px-2 py-0.5 bg-surface/70">DRAFT</span>
+</div>
+<div class="p-4 flex flex-col gap-1 border-t border-on-surface/10">
+<div class="flex items-center justify-between gap-2">
+<span class="font-title-md text-[14px] text-on-surface">DRONE_ARM_L</span>
+<span class="material-symbols-outlined text-[16px] text-tertiary">more_vert</span>
+</div>
+<div class="font-mono-data text-[11px] text-tertiary">2 weeks ago · 2.3 MB</div>
+</div>
+</div>
+
+<div class="project-card" tabindex="0" data-project data-name="BRACKET_MK3" data-modified="3 weeks ago" data-size="0.9 MB" data-tris="48,200" data-status="Ready" data-icon="crop_square">
+<div class="card-thumb bg-3d-grid flex items-center justify-center relative">
+<span class="material-symbols-outlined text-tertiary" style="font-size:48px;">crop_square</span>
+</div>
+<div class="p-4 flex flex-col gap-1 border-t border-on-surface/10">
+<div class="flex items-center justify-between gap-2">
+<span class="font-title-md text-[14px] text-on-surface">BRACKET_MK3</span>
+<span class="material-symbols-outlined text-[16px] text-tertiary">more_vert</span>
+</div>
+<div class="font-mono-data text-[11px] text-tertiary">3 weeks ago · 0.9 MB</div>
+</div>
+</div>
+
+<div class="project-card" tabindex="0" data-project data-name="TURBINE_DISC" data-modified="last month" data-size="8.7 MB" data-tris="642,300" data-status="Archived" data-icon="donut_large">
+<div class="card-thumb bg-3d-grid flex items-center justify-center relative">
+<span class="material-symbols-outlined text-tertiary" style="font-size:48px;">donut_large</span>
+<span class="absolute top-2 right-2 font-mono-data text-[10px] text-tertiary border border-on-surface/20 px-2 py-0.5 bg-surface/70">ARCHIVED</span>
+</div>
+<div class="p-4 flex flex-col gap-1 border-t border-on-surface/10">
+<div class="flex items-center justify-between gap-2">
+<span class="font-title-md text-[14px] text-on-surface">TURBINE_DISC</span>
+<span class="material-symbols-outlined text-[16px] text-tertiary">more_vert</span>
+</div>
+<div class="font-mono-data text-[11px] text-tertiary">last month · 8.7 MB</div>
+</div>
+</div>
+
+<div class="project-card" tabindex="0" data-project data-name="SENSOR_MOUNT" data-modified="last month" data-size="1.1 MB" data-tris="60,100" data-status="Ready" data-icon="database">
+<div class="card-thumb bg-3d-grid flex items-center justify-center relative">
+<span class="material-symbols-outlined text-tertiary" style="font-size:48px;">database</span>
+</div>
+<div class="p-4 flex flex-col gap-1 border-t border-on-surface/10">
+<div class="flex items-center justify-between gap-2">
+<span class="font-title-md text-[14px] text-on-surface">SENSOR_MOUNT</span>
+<span class="material-symbols-outlined text-[16px] text-tertiary">more_vert</span>
+</div>
+<div class="font-mono-data text-[11px] text-tertiary">last month · 1.1 MB</div>
+</div>
+</div>
+
+<div class="project-card" tabindex="0" data-project data-name="CHASSIS_BASE" data-modified="2 months ago" data-size="15.2 MB" data-tris="1,890,000" data-status="Ready" data-icon="dashboard">
+<div class="card-thumb bg-3d-grid flex items-center justify-center relative">
+<span class="material-symbols-outlined text-tertiary" style="font-size:48px;">dashboard</span>
+</div>
+<div class="p-4 flex flex-col gap-1 border-t border-on-surface/10">
+<div class="flex items-center justify-between gap-2">
+<span class="font-title-md text-[14px] text-on-surface">CHASSIS_BASE</span>
+<span class="material-symbols-outlined text-[16px] text-tertiary">more_vert</span>
+</div>
+<div class="font-mono-data text-[11px] text-tertiary">2 months ago · 15.2 MB</div>
+</div>
+</div>
+
+</div>
+</div>
+</section>
+<!-- Right Details Panel -->
+<aside id="panel-details" class="is-hidden fixed right-0 top-0 h-full z-40 w-[360px] bg-surface border-l border-on-surface/10 flex flex-col">
+<div class="p-4 border-b border-on-surface/10 flex justify-between items-center bg-surface-container-low">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-[20px]">description</span>
+<h3 class="font-title-md text-title-md text-on-surface">PROJECT DETAILS</h3>
+</div>
+<button data-close class="text-tertiary hover:text-on-surface"><span class="material-symbols-outlined text-[18px]">close</span></button>
+</div>
+<div class="flex-1 overflow-y-auto flex flex-col">
+<div class="card-thumb-lg bg-3d-grid flex items-center justify-center border-b border-on-surface/10">
+<span id="d-icon" class="material-symbols-outlined text-tertiary" style="font-size:72px;">deployed_code</span>
+</div>
+<div class="p-6 flex flex-col gap-6">
+<div>
+<h4 id="d-name" class="font-headline-lg text-[20px] font-semibold text-on-surface">X-PHENOM_v2</h4>
+<div id="d-status" class="font-mono-data text-[12px] text-primary mt-1">2 non-manifold edges</div>
+</div>
+<div class="flex flex-col gap-3">
+<div class="flex items-center justify-between"><span class="text-body-sm font-body-sm text-tertiary">Modified</span><span id="d-modified" class="font-mono-data text-mono-data text-on-surface">2h ago</span></div>
+<div class="flex items-center justify-between"><span class="text-body-sm font-body-sm text-tertiary">Size</span><span id="d-size" class="font-mono-data text-mono-data text-on-surface">4.2 MB</span></div>
+<div class="flex items-center justify-between"><span class="text-body-sm font-body-sm text-tertiary">Triangles</span><span id="d-tris" class="font-mono-data text-mono-data text-on-surface">248,150</span></div>
+<div class="flex items-center justify-between"><span class="text-body-sm font-body-sm text-tertiary">Format</span><span class="font-mono-data text-mono-data text-on-surface">STL · binary</span></div>
+</div>
+<a href="editor.html" class="w-full bg-primary text-on-primary font-label-caps text-label-caps py-3 chamfer hover:bg-primary-container hover:text-on-primary-container transition-colors border border-transparent hover:border-on-surface flex items-center justify-center gap-2">
+<span class="material-symbols-outlined text-[18px]">open_in_new</span>Open in Editor
+</a>
+<div class="grid-3 gap-2">
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">content_copy</span><span class="font-label-caps text-label-caps">Duplicate</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">edit</span><span class="font-label-caps text-label-caps">Rename</span></button>
+<button class="tool-tile"><span class="material-symbols-outlined text-[20px]">delete</span><span class="font-label-caps text-label-caps">Delete</span></button>
+</div>
+</div>
+</div>
+</aside>
+</main>
+<script>
+(function () {
+  var cards = document.querySelectorAll("[data-project]");
+  var panel = document.getElementById("panel-details");
+  var gallery = document.getElementById("gallery");
+  var out = {
+    name: document.getElementById("d-name"),
+    modified: document.getElementById("d-modified"),
+    size: document.getElementById("d-size"),
+    tris: document.getElementById("d-tris"),
+    status: document.getElementById("d-status"),
+    icon: document.getElementById("d-icon"),
+  };
+  function select(card) {
+    cards.forEach(function (c) { c.classList.toggle("is-selected", c === card); });
+    var status = card.getAttribute("data-status");
+    out.name.textContent = card.getAttribute("data-name");
+    out.modified.textContent = card.getAttribute("data-modified");
+    out.size.textContent = card.getAttribute("data-size");
+    out.tris.textContent = card.getAttribute("data-tris");
+    out.status.textContent = status;
+    out.status.style.color = /ready/i.test(status) ? "var(--color-tertiary)" : "var(--color-primary)";
+    out.icon.textContent = card.getAttribute("data-icon");
+    panel.classList.remove("is-hidden");
+    gallery.classList.add("mr-[360px]");
+  }
+  function deselect() {
+    cards.forEach(function (c) { c.classList.remove("is-selected"); });
+    panel.classList.add("is-hidden");
+    gallery.classList.remove("mr-[360px]");
+  }
+  cards.forEach(function (card) {
+    card.addEventListener("click", function () { select(card); });
+    card.addEventListener("dblclick", function () { window.location.href = "editor.html"; });
+  });
+  document.querySelectorAll("[data-close]").forEach(function (el) {
+    el.addEventListener("click", function (e) { e.preventDefault(); deselect(); });
+  });
+})();
+</script>
+</body></html>

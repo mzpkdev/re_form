@@ -1,0 +1,345 @@
+/* =============================================================================
+   VERTEX CORE — design system
+   Pure CSS, zero build. Pairs with LiteWind (CDN) which supplies the generic
+   utilities (flex, grid, spacing scale, transitions…). This file adds the
+   project's design tokens + every class LiteWind's stripped build omits:
+   the Material-3 color set, opacity modifiers, named layout rails, the type
+   system, a few positioning/effect utilities, and the cyber chamfer/grid.
+   Loaded AFTER LiteWind so these win on conflict.
+   ========================================================================== */
+
+:root {
+  /* ---- Color · Primary ---- */
+  --color-primary: #ec6530;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #f18c65;
+  --color-on-primary-container: #572000;
+
+  /* ---- Color · Secondary / Tertiary ---- */
+  --color-on-secondary: #ffffff;
+  --color-tertiary: #5d5e60;
+
+  /* ---- Color · Surface & background ---- */
+  --color-background: #faf9fe;
+  --color-on-background: #1a1b1f;
+  --color-surface: #faf9fe;
+  --color-on-surface: #1a1b1f;
+  --color-surface-variant: #e3e2e7;
+  --color-on-surface-variant: #5a4136;
+  --color-surface-container: #eeedf3;
+  --color-surface-container-low: #f4f3f8;
+  --color-surface-container-lowest: #ffffff;
+  --color-inverse-surface: #2f3034;
+
+  /* ---- Typeface ---- */
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, monospace;
+
+  /* ---- Layout rails ---- */
+  --container-padding: 24px;
+  --toolbar-width: 64px;
+  --sidebar-width: 280px;
+
+  /* ---- Component primitives ---- */
+  --chamfer-size: 8px;
+  --grid-cell: 40px;
+  --grid-line: color-mix(in srgb, var(--color-on-surface) 5%, transparent);
+}
+
+/* -----------------------------------------------------------------------------
+   Color · background
+   -------------------------------------------------------------------------- */
+.bg-background { background-color: var(--color-background); }
+.bg-primary { background-color: var(--color-primary); }
+.bg-surface { background-color: var(--color-surface); }
+.bg-surface-variant { background-color: var(--color-surface-variant); }
+.bg-surface-container-low { background-color: var(--color-surface-container-low); }
+.bg-surface-container-lowest { background-color: var(--color-surface-container-lowest); }
+.bg-inverse-surface { background-color: var(--color-inverse-surface); }
+
+.bg-primary\/10 { background-color: color-mix(in srgb, var(--color-primary) 10%, transparent); }
+.bg-surface\/50 { background-color: color-mix(in srgb, var(--color-surface) 50%, transparent); }
+.bg-surface\/80 { background-color: color-mix(in srgb, var(--color-surface) 80%, transparent); }
+.bg-surface\/90 { background-color: color-mix(in srgb, var(--color-surface) 90%, transparent); }
+
+/* -----------------------------------------------------------------------------
+   Color · text
+   -------------------------------------------------------------------------- */
+.text-on-background { color: var(--color-on-background); }
+.text-on-primary { color: var(--color-on-primary); }
+.text-on-secondary { color: var(--color-on-secondary); }
+.text-on-surface { color: var(--color-on-surface); }
+.text-on-surface-variant { color: var(--color-on-surface-variant); }
+.text-primary { color: var(--color-primary); }
+.text-surface { color: var(--color-surface); }
+.text-tertiary { color: var(--color-tertiary); }
+.text-on-primary\/70 { color: color-mix(in srgb, var(--color-on-primary) 70%, transparent); }
+
+/* -----------------------------------------------------------------------------
+   Color · border
+   -------------------------------------------------------------------------- */
+.border-primary { border-color: var(--color-primary); }
+.border-on-surface { border-color: var(--color-on-surface); }
+.border-l-primary { border-left-color: var(--color-primary); }
+.border-on-surface\/10 { border-color: color-mix(in srgb, var(--color-on-surface) 10%, transparent); }
+.border-on-surface\/20 { border-color: color-mix(in srgb, var(--color-on-surface) 20%, transparent); }
+.border-tertiary\/30 { border-color: color-mix(in srgb, var(--color-tertiary) 30%, transparent); }
+
+.placeholder-tertiary::placeholder { color: var(--color-tertiary); }
+
+/* -----------------------------------------------------------------------------
+   Interaction states (hover / focus / active)
+   -------------------------------------------------------------------------- */
+.hover\:bg-primary-container:hover { background-color: var(--color-primary-container); }
+.hover\:bg-surface-container:hover { background-color: var(--color-surface-container); }
+.hover\:border-on-surface:hover { border-color: var(--color-on-surface); }
+.hover\:border-primary:hover { border-color: var(--color-primary); }
+.hover\:text-on-primary-container:hover { color: var(--color-on-primary-container); }
+.hover\:text-on-surface:hover { color: var(--color-on-surface); }
+.hover\:text-primary:hover { color: var(--color-primary); }
+.focus\:bg-surface:focus { background-color: var(--color-surface); }
+.focus\:border-primary:focus { border-color: var(--color-primary); }
+.focus\:ring-0:focus { box-shadow: none; outline: none; }
+.active\:opacity-80:active { opacity: 0.8; }
+
+/* -----------------------------------------------------------------------------
+   Layout rails (named + arbitrary widths the mock uses)
+   -------------------------------------------------------------------------- */
+.px-container-padding { padding-left: var(--container-padding); padding-right: var(--container-padding); }
+.h-toolbar-width { height: var(--toolbar-width); }
+.pt-toolbar-width { padding-top: var(--toolbar-width); }
+.w-sidebar-width { width: var(--sidebar-width); }
+.ml-\[280px\] { margin-left: 280px; }
+.mr-\[360px\] { margin-right: 360px; }
+.w-\[360px\] { width: 360px; }
+
+/* -----------------------------------------------------------------------------
+   Type · families
+   -------------------------------------------------------------------------- */
+.font-display-lg,
+.font-headline-lg,
+.font-title-md,
+.font-label-caps,
+.font-mono-data { font-family: var(--font-mono); }
+.font-body-lg,
+.font-body-sm { font-family: var(--font-sans); }
+
+/* -----------------------------------------------------------------------------
+   Type · scale (size / leading / tracking / default weight)
+   -------------------------------------------------------------------------- */
+.text-title-md { font-size: 18px; line-height: 1.4; font-weight: 500; }
+.text-label-caps { font-size: 12px; line-height: 1; letter-spacing: 0.05em; font-weight: 500; }
+.text-mono-data { font-size: 13px; line-height: 1; font-weight: 400; }
+.text-body-sm { font-size: 14px; line-height: 1.5; font-weight: 400; }
+
+/* Explicit pixel sizes — declared after the scale so they win the override. */
+.text-\[11px\] { font-size: 11px; }
+.text-\[12px\] { font-size: 12px; }
+.text-\[13px\] { font-size: 13px; }
+.text-\[14px\] { font-size: 14px; }
+.text-\[16px\] { font-size: 16px; }
+.text-\[18px\] { font-size: 18px; }
+.text-\[20px\] { font-size: 20px; }
+.text-\[24px\] { font-size: 24px; }
+
+/* Explicit weights — declared last so they beat the type-scale defaults. */
+.font-medium { font-weight: 500; }
+.font-semibold { font-weight: 600; }
+.font-bold { font-weight: 700; }
+
+/* -----------------------------------------------------------------------------
+   Effects LiteWind omits
+   -------------------------------------------------------------------------- */
+.backdrop-blur-sm { -webkit-backdrop-filter: blur(4px); backdrop-filter: blur(4px); }
+.backdrop-blur-md { -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); }
+.backdrop-blur-xl { -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
+.drop-shadow-2xl { filter: drop-shadow(0 25px 25px rgb(0 0 0 / 0.15)); }
+
+/* -----------------------------------------------------------------------------
+   Positioning LiteWind omits
+   -------------------------------------------------------------------------- */
+.inset-0 { inset: 0; }
+.mt-auto { margin-top: auto; }
+.ml-auto { margin-left: auto; }
+.left-1\/2 { left: 50%; }
+.top-1\/2 { top: 50%; }
+.right-1\/4 { right: 25%; }
+
+/* Transform composition: one `transform` reads two vars the translate
+   utilities set, so x+y combine instead of overwriting each other. */
+.transform { transform: translate(var(--tx, 0), var(--ty, 0)); }
+.translate-x-1\/2 { --tx: 50%; }
+.-translate-x-1\/2 { --tx: -50%; }
+.-translate-y-1\/2 { --ty: -50%; }
+
+/* -----------------------------------------------------------------------------
+   Component utilities
+   -------------------------------------------------------------------------- */
+.chamfer {
+  clip-path: polygon(
+    var(--chamfer-size) 0,
+    100% 0,
+    100% calc(100% - var(--chamfer-size)),
+    calc(100% - var(--chamfer-size)) 100%,
+    0 100%,
+    0 var(--chamfer-size)
+  );
+}
+.chamfer-tr {
+  clip-path: polygon(
+    0 0,
+    calc(100% - var(--chamfer-size)) 0,
+    100% var(--chamfer-size),
+    100% 100%,
+    0 100%
+  );
+}
+.bg-3d-grid {
+  background-size: var(--grid-cell) var(--grid-cell);
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+}
+
+/* -----------------------------------------------------------------------------
+   Right-panel switching — left-rail items toggle the right sidebars via JS.
+   index.css loads after LiteWind, so `.is-hidden` wins over `.flex`.
+   -------------------------------------------------------------------------- */
+.is-hidden { display: none; }
+.nav-item { border-left: 4px solid transparent; }
+.nav-item.is-active {
+  background-color: color-mix(in srgb, var(--color-primary) 10%, transparent);
+  color: var(--color-primary);
+  border-left-color: var(--color-primary);
+}
+
+/* -----------------------------------------------------------------------------
+   Form controls (settings panel) — toggle switch + select field
+   -------------------------------------------------------------------------- */
+.switch { position: relative; display: inline-flex; align-items: center; cursor: pointer; }
+.switch input { position: absolute; width: 0; height: 0; opacity: 0; }
+.switch-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 9999px;
+  background-color: var(--color-surface-variant);
+  border: 1px solid color-mix(in srgb, var(--color-on-surface) 20%, transparent);
+  transition: background-color 0.2s;
+}
+.switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 9999px;
+  background-color: var(--color-surface-container-lowest);
+  transition: transform 0.2s;
+}
+.switch input:checked + .switch-track { background-color: var(--color-primary); border-color: var(--color-primary); }
+.switch input:checked + .switch-track::after { transform: translateX(16px); }
+
+.field-select {
+  background-color: var(--color-surface-container-low);
+  color: var(--color-on-surface);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 0;
+  border-bottom: 2px solid var(--color-on-surface);
+  border-radius: 0;
+}
+.field-select:focus { outline: none; border-bottom-color: var(--color-primary); }
+
+.field-num {
+  width: 100%;
+  background-color: var(--color-surface-container-low);
+  color: var(--color-on-surface);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 6px 8px;
+  border: 0;
+  border-bottom: 2px solid var(--color-on-surface);
+  border-radius: 0;
+  text-align: right;
+}
+.field-num:focus { outline: none; border-bottom-color: var(--color-primary); }
+
+/* -----------------------------------------------------------------------------
+   Tools panel — 3-up grid + icon tile button
+   -------------------------------------------------------------------------- */
+.grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); }
+.tool-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 12px 4px;
+  border: 1px solid color-mix(in srgb, var(--color-on-surface) 20%, transparent);
+  color: var(--color-on-surface-variant);
+  transition: all 0.2s;
+}
+.tool-tile:hover { border-color: var(--color-primary); color: var(--color-primary); }
+
+/* -----------------------------------------------------------------------------
+   Projects gallery — responsive card grid + selectable project card
+   -------------------------------------------------------------------------- */
+.grid-cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); }
+.card-thumb { height: 140px; }
+.card-thumb-lg { height: 200px; }
+.project-card {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--color-surface-container-lowest);
+  border: 1px solid color-mix(in srgb, var(--color-on-surface) 12%, transparent);
+  cursor: pointer;
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.project-card:hover {
+  border-color: color-mix(in srgb, var(--color-on-surface) 30%, transparent);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 0.08);
+}
+.project-card.is-selected {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 1px var(--color-primary);
+}
+
+/* -----------------------------------------------------------------------------
+   Shell top-nav links (index.html drives the iframe view)
+   -------------------------------------------------------------------------- */
+.nav-link {
+  color: var(--color-on-surface-variant);
+  font-weight: 500;
+  border-bottom: 2px solid transparent;
+  padding-bottom: 4px;
+  transition: color 0.2s;
+}
+.nav-link:hover { color: var(--color-primary); }
+.nav-link.is-active {
+  color: var(--color-primary);
+  font-weight: 700;
+  border-bottom-color: var(--color-primary);
+}
+
+/* -----------------------------------------------------------------------------
+   Settings page — text input + accent swatch
+   -------------------------------------------------------------------------- */
+.field-input {
+  width: 100%;
+  background-color: var(--color-surface-container-low);
+  color: var(--color-on-surface);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 2px solid var(--color-on-surface);
+  border-radius: 0;
+}
+.field-input:focus { outline: none; border-bottom-color: var(--color-primary); }
+.field-input::placeholder { color: var(--color-tertiary); }
+.swatch { width: 28px; height: 28px; border-radius: 9999px; border: 0; cursor: pointer; }
+.swatch.is-selected { outline: 2px solid var(--color-on-surface); outline-offset: 2px; }
