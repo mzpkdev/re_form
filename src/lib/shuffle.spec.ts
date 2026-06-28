@@ -1,5 +1,7 @@
 import { describe, expect, it } from "bun:test"
-import type * as THREE from "three"
+import * as THREE from "three"
+import { initManifold } from "./manifold"
+import { geometryToManifold } from "./model"
 import { geometryToBinaryStl, shuffleGeometry, shuffleStl } from "./shuffle"
 import { parseStl } from "./stl"
 
@@ -148,6 +150,26 @@ describe("shuffle", () => {
             const plain = new Uint8Array(geometryToBinaryStl(parseStl(input)))
 
             expect(remixed).not.toEqual(plain)
+        })
+    })
+
+    context("geometryToManifold round-trip", () => {
+        it("converts a shuffled solid back into a valid manifold", async () => {
+            const wasm = await initManifold()
+            // A consistently-wound closed solid, like the app's live manifold; the
+            // tetra fixture above is a soup used only for geometry-shape checks.
+            const soup = new THREE.BoxGeometry(2, 2, 2).toNonIndexed()
+            const remixed = shuffleGeometry(soup, { reorder: false, subdivide: 1, jitter: 0.01, seed: SEED })
+            soup.dispose()
+
+            const manifold = geometryToManifold(wasm, remixed)
+
+            expect(manifold.isEmpty()).toBe(false)
+            // Volume ≈ the original 8 mm³ — jitter is sub-tolerance, so the remix is a look-alike.
+            expect(manifold.volume()).toBeCloseTo(8, 0)
+
+            manifold.delete()
+            remixed.dispose()
         })
     })
 })
