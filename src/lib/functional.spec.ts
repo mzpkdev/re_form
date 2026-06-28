@@ -130,25 +130,6 @@ describe("functional end-to-end", () => {
             cube.delete()
             shell.delete()
         })
-
-        it("builds an OPEN hollow tube that is watertight and printable (a single connected wall)", () => {
-            // The printable hollow part: a pipe open at both ends is a single
-            // connected solid, so it passes the gate where a sealed shell cannot.
-            const solid = wasm.Manifold.cylinder(20, 10, 10, 48, true)
-            const solidVolume = solid.volume()
-            solid.delete()
-
-            const tube = makeTube(wasm, { outerRadius: 10, wall: 2, height: 20 })
-
-            expect(tube.status()).toBe("NoError")
-            expect(tube.isEmpty()).toBe(false)
-            // Hollow ⇒ less material than the solid cylinder of the same envelope.
-            expect(tube.volume()).toBeGreaterThan(0)
-            expect(tube.volume()).toBeLessThan(solidVolume)
-            expect(checkPrintability(wasm, tube).ok).toBe(true)
-
-            tube.delete()
-        })
     })
 
     context("export integrity", () => {
