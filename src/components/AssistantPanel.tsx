@@ -9,6 +9,7 @@ import { initManifold } from "../lib/manifold"
 import type { Transform, Vec3 } from "../lib/model"
 import { getManifold, setManifold } from "../lib/modelStore"
 import { type ChatMessage, streamChat, type ToolCall, type ToolDef } from "../lib/openrouter"
+import { buildSculpt, SCULPT_TOOL, type SculptScene } from "../lib/sculpt"
 import { Typewriter } from "./Typewriter"
 
 type Message = {
@@ -60,7 +61,7 @@ const SET_TRANSFORM_TOOL: ToolDef = {
     }
 }
 
-const tools: ToolDef[] = [...EDIT_TOOLS, SET_TRANSFORM_TOOL]
+const tools: ToolDef[] = [...EDIT_TOOLS, SET_TRANSFORM_TOOL, SCULPT_TOOL]
 
 /** A [x, y, z] number triple from the arg bag, or undefined when absent/malformed. */
 const triple = (value: unknown): Vec3 | undefined => {
@@ -217,6 +218,16 @@ export const AssistantPanel = ({
                     return "Transform updated."
                 }
                 const wasm = await initManifold()
+                if (name === "sculpt") {
+                    try {
+                        const scene = args as SculptScene
+                        const next = buildSculpt(wasm, scene)
+                        setManifold(next)
+                        return `Sculpted a shape with ${scene.parts.length} parts; volume ${next.volume().toFixed(1)} mm³.`
+                    } catch (error) {
+                        return `Error: ${(error as Error).message}`
+                    }
+                }
                 try {
                     const next = applyEdit(wasm, getManifold(), name, args)
                     setManifold(next)
