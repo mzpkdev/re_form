@@ -1,4 +1,5 @@
 import { useState } from "react"
+import * as THREE from "three"
 import { AssistantPanel } from "./components/AssistantPanel"
 import { SettingsView } from "./components/SettingsView"
 import { ShufflePanel } from "./components/ShufflePanel"
@@ -9,7 +10,12 @@ import { Viewport } from "./components/Viewport"
 import { cn } from "./design/cn"
 import { IDENTITY_TRANSFORM, type Transform, transformedGeometry } from "./lib/model"
 import { getManifold } from "./lib/modelStore"
-import { exportStl } from "./lib/stl"
+import { exportStl, verifyStlDimensions } from "./lib/stl"
+
+// No naming UI yet; the export plumbing is structured so a part name could be
+// threaded in later (it would drive both the filename and, once 3MF lands, the
+// per-object name).
+const DEFAULT_PART_NAME = "model"
 
 export const App = () => {
     const [view, setView] = useState<"editor" | "settings">("editor")
@@ -22,14 +28,27 @@ export const App = () => {
         if (!m) {
             return
         }
+        const name = DEFAULT_PART_NAME
         const geometry = transformedGeometry(m, transform)
-        const buffer = exportStl(geometry)
+
+        // Capture the intended size (mm) from the geometry before export so we
+        // can confirm the written bytes encode the same dimensions.
+        geometry.computeBoundingBox()
+        const intended = geometry.boundingBox?.getSize(new THREE.Vector3())
+        const intendedSize = intended ? { x: intended.x, y: intended.y, z: intended.z } : null
+
+        const buffer = exportStl(geometry, { name, units: "mm" })
         geometry.dispose()
+
+        if (intendedSize && !verifyStlDimensions(buffer, intendedSize)) {
+            console.warn(`Exported STL dimensions do not match intended size (mm): ${JSON.stringify(intendedSize)}`)
+        }
+
         const blob = new Blob([buffer], { type: "model/stl" })
         const url = URL.createObjectURL(blob)
         const anchor = document.createElement("a")
         anchor.href = url
-        anchor.download = "model.stl"
+        anchor.download = `${name}.stl`
         anchor.click()
         URL.revokeObjectURL(url)
     }

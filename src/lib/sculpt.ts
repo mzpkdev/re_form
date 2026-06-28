@@ -14,6 +14,7 @@ import {
     translated,
     union
 } from "./sdf"
+import { assertValidSolid } from "./validate"
 
 /**
  * A declarative sculpting vocabulary: a scene is a bag of primitive {@link SculptPart}s
@@ -239,10 +240,7 @@ export const buildSculpt = (wasm: ManifoldToplevel, scene: SculptScene): Manifol
     const edgeLength = Math.max(D / 64, 0.3)
 
     const result = wasm.Manifold.levelSet(inside, bounds, edgeLength)
-    if (result.isEmpty() || result.status() !== "NoError" || result.volume() <= 0) {
-        result.delete()
-        throw new Error("sculpt produced an empty or invalid solid")
-    }
+    assertValidSolid(result, "sculpt produced an empty or invalid solid")
     return result
 }
 

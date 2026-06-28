@@ -13,7 +13,8 @@ describe("edits", () => {
                 "drill_hole",
                 "add_primitive",
                 "cut_primitive",
-                "intersect_primitive"
+                "intersect_primitive",
+                "hollow"
             ])
             for (const tool of EDIT_TOOLS) {
                 expect(tool.type).toBe("function")
@@ -51,6 +52,114 @@ describe("edits", () => {
             expect(cylinder.status()).toBe("NoError")
             expect(cylinder.volume()).toBeGreaterThan(0)
             cylinder.delete()
+        })
+
+        it("builds a cone with the frustum volume π/3·h·(r1²+r1·r2+r2²)", async () => {
+            const wasm = await initManifold()
+            const r1 = 8
+            const r2 = 3
+            const h = 12
+            const cone = applyEdit(wasm, null, "create_primitive", {
+                shape: "cone",
+                radius_bottom: r1,
+                radius_top: r2,
+                height: h
+            })
+            expect(cone.status()).toBe("NoError")
+            const expected = (Math.PI / 3) * h * (r1 * r1 + r1 * r2 + r2 * r2)
+            expect(cone.volume()).toBeCloseTo(expected, -1)
+            cone.delete()
+        })
+
+        it("builds a pointed cone when radius_top is 0", async () => {
+            const wasm = await initManifold()
+            const r1 = 6
+            const h = 10
+            const cone = applyEdit(wasm, null, "create_primitive", {
+                shape: "cone",
+                radius_bottom: r1,
+                radius_top: 0,
+                height: h
+            })
+            expect(cone.status()).toBe("NoError")
+            // A pointed cone's volume is π/3·r²·h.
+            expect(cone.volume()).toBeCloseTo((Math.PI / 3) * r1 * r1 * h, -1)
+            cone.delete()
+        })
+
+        it("builds a tube that is hollow (less volume than a solid cylinder) and as tall as its height", async () => {
+            const wasm = await initManifold()
+            const outerRadius = 10
+            const height = 20
+            const tube = applyEdit(wasm, null, "create_primitive", {
+                shape: "tube",
+                outer_radius: outerRadius,
+                wall: 2,
+                height
+            })
+            expect(tube.status()).toBe("NoError")
+
+            const solid = applyEdit(wasm, null, "create_primitive", {
+                shape: "cylinder",
+                radius: outerRadius,
+                height
+            })
+            expect(tube.volume()).toBeLessThan(solid.volume())
+
+            const box = tube.boundingBox()
+            expect(box.max[2] - box.min[2]).toBeCloseTo(height, 5)
+
+            tube.delete()
+            solid.delete()
+        })
+
+        it("builds a chamfered_box whose bbox matches the base sizes with less volume than the full box", async () => {
+            const wasm = await initManifold()
+            const sizeX = 20
+            const sizeY = 16
+            const sizeZ = 12
+            const box = applyEdit(wasm, null, "create_primitive", {
+                shape: "chamfered_box",
+                size_x: sizeX,
+                size_y: sizeY,
+                size_z: sizeZ,
+                chamfer: 3
+            })
+            expect(box.status()).toBe("NoError")
+
+            const bbox = box.boundingBox()
+            expect(bbox.max[0] - bbox.min[0]).toBeCloseTo(sizeX, 5)
+            expect(bbox.max[1] - bbox.min[1]).toBeCloseTo(sizeY, 5)
+            expect(bbox.max[2] - bbox.min[2]).toBeCloseTo(sizeZ, 5)
+            // The tapered top removes material, so volume is below the full box.
+            expect(box.volume()).toBeLessThan(sizeX * sizeY * sizeZ)
+
+            box.delete()
+        })
+    })
+
+    context("hollow", () => {
+        it("scoops a cube into a closed shell with less volume, still valid", async () => {
+            const wasm = await initManifold()
+            const cube = applyEdit(wasm, null, "create_primitive", {
+                shape: "cube",
+                size_x: 20,
+                size_y: 20,
+                size_z: 20
+            })
+            const before = cube.volume()
+
+            const hollowed = applyEdit(wasm, cube, "hollow", { wall: 2 })
+            expect(hollowed.status()).toBe("NoError")
+            expect(hollowed.isEmpty()).toBe(false)
+            expect(hollowed.volume()).toBeGreaterThan(0)
+            expect(hollowed.volume()).toBeLessThan(before)
+
+            // Source survives the edit.
+            expect(cube.volume()).toBeCloseTo(before, 5)
+
+            hollowed.delete()
+            cube.delete()
         })
     })
 
@@ -128,6 +237,59 @@ describe("edits", () => {
             // Source survived all three ops.
             expect(base.volume()).toBeCloseTo(baseVolume, 5)
             base.delete()
+        })
+    })
+
+    context("fit / tolerance", () => {
+        it("drill_hole with fit='slip' removes more material than no fit (smaller resulting volume)", async () => {
+            const wasm = await initManifold()
+            const makeCube = () =>
+                applyEdit(wasm, null, "create_primitive", { shape: "cube", size_x: 20, size_y: 20, size_z: 20 })
+
+            const cubeA = makeCube()
+            const plain = applyEdit(wasm, cubeA, "drill_hole", { radius: 4, depth: 30, axis: "z" })
+
+            const cubeB = makeCube()
+            const slip = applyEdit(wasm, cubeB, "drill_hole", { radius: 4, depth: 30, axis: "z", fit: "slip" })
+
+            // A slip hole is bored wider, so more material is gone and less remains.
+            expect(slip.volume()).toBeLessThan(plain.volume())
+
+            plain.delete()
+            slip.delete()
+            cubeA.delete()
+            cubeB.delete()
+        })
+
+        it("cut_primitive with a fit enlarges the cut (smaller resulting volume than no fit)", async () => {
+            const wasm = await initManifold()
+            const makeCube = () =>
+                applyEdit(wasm, null, "create_primitive", { shape: "cube", size_x: 30, size_y: 30, size_z: 30 })
+
+            const cubeA = makeCube()
+            const plain = applyEdit(wasm, cubeA, "cut_primitive", {
+                shape: "cube",
+                size_x: 10,
+                size_y: 10,
+                size_z: 40
+            })
+
+            const cubeB = makeCube()
+            const slip = applyEdit(wasm, cubeB, "cut_primitive", {
+                shape: "cube",
+                size_x: 10,
+                size_y: 10,
+                size_z: 40,
+                fit: "slip"
+            })
+
+            // The fit oversizes the pocket per side, so more is removed and less remains.
+            expect(slip.volume()).toBeLessThan(plain.volume())
+
+            plain.delete()
+            slip.delete()
+            cubeA.delete()
+            cubeB.delete()
         })
     })
 

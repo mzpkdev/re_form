@@ -1,5 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import { runAgentTurn } from "./agent"
+import { clearToolLog, getToolLog } from "./log"
 import type { ChatChunk, ChatMessage, ToolCall } from "./openrouter"
 
 const context = describe
@@ -75,6 +76,57 @@ describe("runAgentTurn", () => {
             expect(executions).toBe(3)
             // 3 assistant + 3 tool messages appended to the single user message.
             expect(history).toHaveLength(7)
+        })
+    })
+
+    context("observability", () => {
+        it("records each tool call's name, args, result, and ok flag in the tool log", async () => {
+            clearToolLog()
+            const call = toolCall("call-1", "create_primitive", '{"shape":"cube"}')
+            const streams = [
+                streamOf([{ type: "tool_calls", calls: [call] }])(),
+                streamOf([{ type: "text", value: "Done." }])()
+            ]
+            let streamIndex = 0
+
+            await runAgentTurn([{ role: "user", content: "make a cube" }], {
+                stream: () => streams[streamIndex++],
+                execute: () => "Applied create_primitive.",
+                onText: () => {}
+            })
+
+            const log = getToolLog()
+            expect(log).toHaveLength(1)
+            expect(log[0]).toEqual({
+                step: 0,
+                name: "create_primitive",
+                args: '{"shape":"cube"}',
+                result: "Applied create_primitive.",
+                ok: true
+            })
+        })
+
+        it("flags a failing tool call as not ok", async () => {
+            clearToolLog()
+            const call = toolCall("call-1", "drill_hole", '{"radius":2}')
+            const streams = [
+                streamOf([{ type: "tool_calls", calls: [call] }])(),
+                streamOf([{ type: "text", value: "Could not." }])()
+            ]
+            let streamIndex = 0
+
+            await runAgentTurn([{ role: "user", content: "drill" }], {
+                stream: () => streams[streamIndex++],
+                execute: () => "Error: no editable solid",
+                onText: () => {}
+            })
+
+            const log = getToolLog()
+            expect(log).toHaveLength(1)
+            expect(log[0].name).toBe("drill_hole")
+            expect(log[0].args).toBe('{"radius":2}')
+            expect(log[0].result).toBe("Error: no editable solid")
+            expect(log[0].ok).toBe(false)
         })
     })
 

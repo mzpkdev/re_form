@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import * as THREE from "three"
 import { initManifold } from "./manifold"
-import { geometryToManifold, transformedGeometry } from "./model"
+import { geometryToManifold, transformedBounds, transformedGeometry } from "./model"
 
 const context = describe
 
@@ -50,6 +50,33 @@ describe("model", () => {
             expect(size.z).toBeCloseTo(4, 5)
 
             geometry.dispose()
+            source.delete()
+        })
+    })
+
+    context("transformedBounds", () => {
+        it("reports the post-transform AABB without meshing", async () => {
+            const wasm = await initManifold()
+            // 10mm cube centred at origin → [-5,5]^3.
+            const source = wasm.Manifold.cube([10, 10, 10], true)
+
+            const { min, max } = transformedBounds(source, {
+                position: [5, 0, 0],
+                rotation: [0, 0, 0],
+                scale: [2, 1, 1]
+            })
+
+            // Scaled ×[2,1,1] → 20×10×10 about origin, then shifted +5 in X:
+            // X spans [-5, 15]; Y and Z stay [-5, 5].
+            expect(min[0]).toBeCloseTo(-5, 5)
+            expect(max[0]).toBeCloseTo(15, 5)
+            expect(min[1]).toBeCloseTo(-5, 5)
+            expect(max[1]).toBeCloseTo(5, 5)
+            expect(min[2]).toBeCloseTo(-5, 5)
+            expect(max[2]).toBeCloseTo(5, 5)
+
+            // The source is left intact for the caller.
+            expect(source.volume()).toBeCloseTo(1000, 0)
             source.delete()
         })
     })

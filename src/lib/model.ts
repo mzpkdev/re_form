@@ -1,6 +1,7 @@
-import type { Manifold, ManifoldToplevel, Mesh } from "manifold-3d"
+import type { Box, Manifold, ManifoldToplevel, Mesh } from "manifold-3d"
 import * as THREE from "three"
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js"
+import { assertValidSolid } from "./validate"
 
 export type Vec3 = [number, number, number]
 
@@ -83,11 +84,25 @@ export const geometryToManifold = (wasm: ManifoldToplevel, geometry: THREE.Buffe
     } catch {
         throw new Error("mesh is not manifold")
     }
-    if (manifold.isEmpty() || manifold.status() !== "NoError" || manifold.volume() <= 0) {
-        manifold.delete()
-        throw new Error("mesh is not manifold")
-    }
+    assertValidSolid(manifold, "mesh is not manifold")
     return manifold
+}
+
+/**
+ * Apply a TRS transform to `source`, returning a NEW Manifold. Order is
+ * scale → rotate → translate, matching how a TRS matrix composes (rotation in
+ * degrees, applied x→y→z — manifold's convention). The intermediate scaled and
+ * rotated handles are deleted; `source` belongs to the caller and is left
+ * intact. Shared by {@link transformedGeometry} and {@link transformedBounds}
+ * so the two can never drift.
+ */
+const applyTransform = (source: Manifold, t: Transform): Manifold => {
+    const scaled = source.scale(t.scale)
+    const rotated = scaled.rotate(t.rotation)
+    const translated = rotated.translate(t.position)
+    scaled.delete()
+    rotated.delete()
+    return translated
 }
 
 /**
@@ -98,13 +113,23 @@ export const geometryToManifold = (wasm: ManifoldToplevel, geometry: THREE.Buffe
  * caller and is left intact.
  */
 export const transformedGeometry = (source: Manifold, t: Transform): THREE.BufferGeometry => {
-    const scaled = source.scale(t.scale)
-    const rotated = scaled.rotate(t.rotation)
-    const translated = rotated.translate(t.position)
-    const mesh = translated.getMesh()
+    const transformed = applyTransform(source, t)
+    const mesh = transformed.getMesh()
     const geometry = meshToBufferGeometry(mesh)
-    scaled.delete()
-    rotated.delete()
-    translated.delete()
+    transformed.delete()
     return geometry
+}
+
+/**
+ * Axis-aligned bounding box of `source` after the same scale → rotate →
+ * translate transform {@link transformedGeometry} bakes in — i.e. the box of
+ * the FINAL exported part, in millimetres. Reads the transformed manifold's
+ * bounding box directly (no meshing) and deletes every intermediate; `source`
+ * belongs to the caller and is left intact.
+ */
+export const transformedBounds = (source: Manifold, t: Transform): { min: Vec3; max: Vec3 } => {
+    const transformed = applyTransform(source, t)
+    const box: Box = transformed.boundingBox()
+    transformed.delete()
+    return { min: box.min, max: box.max }
 }

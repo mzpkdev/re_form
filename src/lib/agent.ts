@@ -1,3 +1,4 @@
+import { logToolEvent } from "./log"
 import type { ChatChunk, ChatMessage, ToolCall } from "./openrouter"
 
 /**
@@ -58,7 +59,16 @@ export const runAgentTurn = async (messages: ChatMessage[], deps: RunAgentTurnDe
         deps.onAction?.(calls)
         history.push({ role: "assistant", content: text, tool_calls: calls })
         for (const call of calls) {
-            history.push({ role: "tool", tool_call_id: call.id, content: await deps.execute(call) })
+            const result = await deps.execute(call)
+            // Observability only — record the call's outcome without altering it.
+            logToolEvent({
+                step,
+                name: call.function.name,
+                args: call.function.arguments,
+                result,
+                ok: !result.startsWith("Error")
+            })
+            history.push({ role: "tool", tool_call_id: call.id, content: result })
         }
     }
 

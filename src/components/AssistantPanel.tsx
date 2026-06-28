@@ -6,10 +6,12 @@ import { useApiKey, useBaseUrl, useModel } from "../hooks/useApiConfig"
 import { runAgentTurn } from "../lib/agent"
 import { applyEdit, EDIT_TOOLS } from "../lib/edits"
 import { initManifold } from "../lib/manifold"
-import type { Transform, Vec3 } from "../lib/model"
+import { type Transform, transformedBounds, type Vec3 } from "../lib/model"
 import { getManifold, setManifold } from "../lib/modelStore"
 import { type ChatMessage, streamChat, type ToolCall, type ToolDef } from "../lib/openrouter"
+import { checkPrintability } from "../lib/printability"
 import { buildSculpt, SCULPT_TOOL, type SculptScene } from "../lib/sculpt"
+import { formatToolError } from "../lib/validate"
 import { Markdown } from "./Markdown"
 import { Typewriter } from "./Typewriter"
 
@@ -75,28 +77,42 @@ const triple = (value: unknown): Vec3 | undefined => {
     return [value[0], value[1], value[2]]
 }
 
+const fmt = (v: Vec3): string => v.map((n) => n.toFixed(1)).join(", ")
+
 /**
- * Describe the live model for the system prompt so the assistant knows what it is
- * editing — its bounding box and volume, or that the canvas is empty.
+ * Describe the live model for the system prompt so the assistant knows what it
+ * is editing. Reports the TRUE post-transform bounding box — the final exported
+ * size after the active set_transform placement (scale → rotate → translate) is
+ * baked in — plus that placement and the post-scale volume, or that the canvas
+ * is empty. Takes the current transform so the read-back matches what export and
+ * the viewport actually produce.
  */
-const describeModel = (): string => {
+const describeModel = (t: Transform): string => {
     const m = getManifold()
     if (!m) {
         return "No model loaded yet — use create_primitive to start."
     }
-    const box = m.boundingBox()
-    const min = box.min.map((n) => n.toFixed(1)).join(", ")
-    const max = box.max.map((n) => n.toFixed(1)).join(", ")
-    return `Current model: bounding box min [${min}] mm, max [${max}] mm, volume ${m.volume().toFixed(1)} mm³.`
+    const { min, max } = transformedBounds(m, t)
+    const [sx, sy, sz] = t.scale
+    const finalVolume = m.volume() * sx * sy * sz
+    return [
+        `Current model (final exported size, after the active placement): bounding box min [${fmt(min)}] mm, max [${fmt(max)}] mm, volume ${finalVolume.toFixed(1)} mm³.`,
+        `Active placement — position [${fmt(t.position)}] mm, rotation [${fmt(t.rotation)}] deg, scale [${fmt(t.scale)}].`
+    ].join(" ")
 }
 
-const buildSystemMessage = (): ChatMessage => ({
+const buildSystemMessage = (t: Transform): ChatMessage => ({
     role: "system",
     content: [
         "You are a CAD assistant that edits a single 3D solid. All units are millimetres.",
         "To change the model, call the provided tools — never describe edits you did not make.",
         "Use create_primitive to start a new solid; add/cut/intersect_primitive and drill_hole to reshape it; set_transform to place the whole model.",
-        describeModel()
+        "create/add/cut/intersect_primitive accept these shapes: cube, sphere, cylinder, cone (radius_bottom, radius_top — 0 for a pointed apex — and height), tube (outer_radius, wall, height), and chamfered_box (size_x/y/z plus chamfer, the per-side inset of the tapered top face).",
+        "Use the hollow tool to scoop the current solid into a closed shell of a given wall thickness (inner corners round off).",
+        "For holes/pockets that mate with another part, pass fit: press (≈0.1 mm/side, interference), snug (≈0.2), or slip (≈0.4, free sliding), plus optional printer_offset for calibration; drill_hole sizes the hole up to receive a peg, cut_primitive oversizes the pocket.",
+        "Each edit reports the part's new size and a quick printability check; mention any flagged issues to the user.",
+        "The bounding box and volume below are the FINAL exported size in mm, with the active set_transform placement (scale, rotation, translation) already applied — not the raw pre-transform solid.",
+        describeModel(t)
     ].join(" ")
 })
 
@@ -236,15 +252,21 @@ export const AssistantPanel = ({
                         setManifold(next)
                         return `Sculpted a shape with ${scene.parts.length} parts; volume ${next.volume().toFixed(1)} mm³.`
                     } catch (error) {
-                        return `Error: ${(error as Error).message}`
+                        return formatToolError(error)
                     }
                 }
                 try {
                     const next = applyEdit(wasm, getManifold(), name, args)
                     setManifold(next)
-                    return `Applied ${name}. Volume now ${next.volume().toFixed(1)} mm³.`
+                    const box = next.boundingBox()
+                    const dims = `${(box.max[0] - box.min[0]).toFixed(1)}×${(box.max[1] - box.min[1]).toFixed(1)}×${(box.max[2] - box.min[2]).toFixed(1)} mm`
+                    const report = checkPrintability(wasm, next)
+                    const printLine = report.issues.length
+                        ? ` Printability: ${report.issues.map((i) => `${i.level === "error" ? "✗" : "⚠"} ${i.code} (${i.message})`).join("; ")}`
+                        : " Printability: OK."
+                    return `Applied ${name}. Size ${dims}, volume ${next.volume().toFixed(1)} mm³.${printLine}`
                 } catch (error) {
-                    return `Error: ${(error as Error).message}`
+                    return formatToolError(error)
                 }
             }
 
@@ -301,7 +323,7 @@ export const AssistantPanel = ({
         const userId = nextId.current++
         const replyId = nextId.current++
         const history: ChatMessage[] = [
-            buildSystemMessage(),
+            buildSystemMessage(transformRef.current),
             ...messages.map((m) => ({ role: m.role, content: m.text })),
             { role: "user", content: userText }
         ]

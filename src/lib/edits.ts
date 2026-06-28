@@ -1,4 +1,7 @@
 import type { Manifold, ManifoldToplevel } from "manifold-3d"
+import { clearanceFor, FIT_PRESETS, type Fit, holeForPeg } from "./fit"
+import { makeChamferedBox, makeCone, makeShell, makeTube } from "./primitives"
+import { assertValidSolid } from "./validate"
 
 /**
  * The CSG edit vocabulary the AI assistant invokes via tool-calling.
@@ -18,17 +21,43 @@ const CIRCULAR_SEGMENTS = 48
 const PRIMITIVE_PROPERTIES = {
     shape: {
         type: "string",
-        enum: ["cube", "sphere", "cylinder"],
+        enum: ["cube", "sphere", "cylinder", "cone", "tube", "chamfered_box"],
         description: "Primitive kind to build."
     },
-    size_x: { type: "number", description: "Cube width along X in millimetres (cube only)." },
-    size_y: { type: "number", description: "Cube depth along Y in millimetres (cube only)." },
-    size_z: { type: "number", description: "Cube height along Z in millimetres (cube only)." },
+    size_x: { type: "number", description: "Box width along X in millimetres (cube and chamfered_box)." },
+    size_y: { type: "number", description: "Box depth along Y in millimetres (cube and chamfered_box)." },
+    size_z: { type: "number", description: "Box height along Z in millimetres (cube and chamfered_box)." },
     radius: { type: "number", description: "Radius in millimetres (sphere and cylinder)." },
-    height: { type: "number", description: "Cylinder height along Z in millimetres (cylinder only)." },
+    height: { type: "number", description: "Height along Z in millimetres (cylinder, cone, and tube)." },
+    radius_bottom: { type: "number", description: "Cone base radius along Z- in millimetres (cone only)." },
+    radius_top: {
+        type: "number",
+        description: "Cone top radius in millimetres; 0 makes a pointed apex (cone only)."
+    },
+    outer_radius: { type: "number", description: "Tube outer radius in millimetres (tube only)." },
+    wall: { type: "number", description: "Tube wall thickness in millimetres (tube only)." },
+    chamfer: {
+        type: "number",
+        description: "Inset per side of the tapered top face in millimetres (chamfered_box only)."
+    },
     x: { type: "number", description: "X position of the primitive's centre in millimetres (default 0)." },
     y: { type: "number", description: "Y position of the primitive's centre in millimetres (default 0)." },
     z: { type: "number", description: "Z position of the primitive's centre in millimetres (default 0)." }
+}
+
+/** Optional fit/tolerance params shared by drill_hole and cut_primitive (receiving features). */
+const FIT_PROPERTIES = {
+    fit: {
+        type: "string",
+        enum: ["press", "snug", "slip"],
+        description:
+            "Optional mating clearance: press (≈0.1 mm/side, interference), snug (≈0.2), or slip (≈0.4, free sliding). Omit for an exact-size feature."
+    },
+    printer_offset: {
+        type: "number",
+        description:
+            "Optional per-printer/material clearance correction in millimetres, added on top of the fit preset (default 0)."
+    }
 }
 
 export const EDIT_TOOLS: ToolDef[] = [
@@ -43,14 +72,37 @@ export const EDIT_TOOLS: ToolDef[] = [
                 properties: {
                     shape: {
                         type: "string",
-                        enum: ["cube", "sphere", "cylinder"],
+                        enum: ["cube", "sphere", "cylinder", "cone", "tube", "chamfered_box"],
                         description: "Primitive kind to build."
                     },
-                    size_x: { type: "number", description: "Cube width along X in millimetres (cube only)." },
-                    size_y: { type: "number", description: "Cube depth along Y in millimetres (cube only)." },
-                    size_z: { type: "number", description: "Cube height along Z in millimetres (cube only)." },
+                    size_x: {
+                        type: "number",
+                        description: "Box width along X in millimetres (cube and chamfered_box)."
+                    },
+                    size_y: {
+                        type: "number",
+                        description: "Box depth along Y in millimetres (cube and chamfered_box)."
+                    },
+                    size_z: {
+                        type: "number",
+                        description: "Box height along Z in millimetres (cube and chamfered_box)."
+                    },
                     radius: { type: "number", description: "Radius in millimetres (sphere and cylinder)." },
-                    height: { type: "number", description: "Cylinder height along Z in millimetres (cylinder only)." }
+                    height: {
+                        type: "number",
+                        description: "Height along Z in millimetres (cylinder, cone, and tube)."
+                    },
+                    radius_bottom: { type: "number", description: "Cone base radius in millimetres (cone only)." },
+                    radius_top: {
+                        type: "number",
+                        description: "Cone top radius in millimetres; 0 makes a pointed apex (cone only)."
+                    },
+                    outer_radius: { type: "number", description: "Tube outer radius in millimetres (tube only)." },
+                    wall: { type: "number", description: "Tube wall thickness in millimetres (tube only)." },
+                    chamfer: {
+                        type: "number",
+                        description: "Inset per side of the tapered top face in millimetres (chamfered_box only)."
+                    }
                 },
                 required: ["shape"],
                 additionalProperties: false
@@ -62,11 +114,14 @@ export const EDIT_TOOLS: ToolDef[] = [
         function: {
             name: "drill_hole",
             description:
-                "Drill a cylindrical hole through the current solid by subtracting a cylinder. The cylinder's length runs along the chosen axis and it is centred at (x, y, z). All measurements are in millimetres.",
+                "Drill a cylindrical hole through the current solid by subtracting a cylinder. The cylinder's length runs along the chosen axis and it is centred at (x, y, z). Pass an optional fit to size the hole UP from the given radius so it can receive a peg of that nominal radius. All measurements are in millimetres.",
             parameters: {
                 type: "object",
                 properties: {
-                    radius: { type: "number", description: "Hole radius in millimetres." },
+                    radius: {
+                        type: "number",
+                        description: "Nominal hole radius in millimetres (before any fit clearance)."
+                    },
                     depth: { type: "number", description: "Hole length along the chosen axis in millimetres." },
                     axis: {
                         type: "string",
@@ -75,7 +130,8 @@ export const EDIT_TOOLS: ToolDef[] = [
                     },
                     x: { type: "number", description: "X position of the hole's centre in millimetres (default 0)." },
                     y: { type: "number", description: "Y position of the hole's centre in millimetres (default 0)." },
-                    z: { type: "number", description: "Z position of the hole's centre in millimetres (default 0)." }
+                    z: { type: "number", description: "Z position of the hole's centre in millimetres (default 0)." },
+                    ...FIT_PROPERTIES
                 },
                 required: ["radius", "depth", "axis"],
                 additionalProperties: false
@@ -101,10 +157,10 @@ export const EDIT_TOOLS: ToolDef[] = [
         function: {
             name: "cut_primitive",
             description:
-                "Cut (subtract) a positioned primitive out of the current solid. All measurements are in millimetres.",
+                "Cut (subtract) a positioned primitive out of the current solid, leaving a pocket. Pass an optional fit to oversize the pocket by the mating clearance PER SIDE so a nominal-size part drops in. All measurements are in millimetres.",
             parameters: {
                 type: "object",
-                properties: PRIMITIVE_PROPERTIES,
+                properties: { ...PRIMITIVE_PROPERTIES, ...FIT_PROPERTIES },
                 required: ["shape"],
                 additionalProperties: false
             }
@@ -120,6 +176,22 @@ export const EDIT_TOOLS: ToolDef[] = [
                 type: "object",
                 properties: PRIMITIVE_PROPERTIES,
                 required: ["shape"],
+                additionalProperties: false
+            }
+        }
+    },
+    {
+        type: "function",
+        function: {
+            name: "hollow",
+            description:
+                "Hollow out the current solid into a closed shell of the given wall thickness (inner corners are rounded). Millimetres.",
+            parameters: {
+                type: "object",
+                properties: {
+                    wall: { type: "number", description: "Shell wall thickness in millimetres." }
+                },
+                required: ["wall"],
                 additionalProperties: false
             }
         }
@@ -152,6 +224,21 @@ const dimension = (value: unknown, label: string): number => {
     return n
 }
 
+/**
+ * A finite dimension that is required and may be exactly 0 (e.g. a cone's apex
+ * radius). Like {@link dimension} but accepts 0; rejects missing or negative.
+ */
+const nonNegative = (value: unknown, label: string): number => {
+    const n = optionalFinite(value, label)
+    if (n === undefined) {
+        throw new Error(`${label} is required and must be 0 or greater`)
+    }
+    if (n < 0) {
+        throw new Error(`${label} must be 0 or greater`)
+    }
+    return n
+}
+
 /** Default cube edge / sphere / cylinder dimensions when the caller omits them (millimetres). */
 const DEFAULT_SIZE = 10
 
@@ -177,7 +264,32 @@ const buildPrimitive = (wasm: ManifoldToplevel, args: Record<string, unknown>): 
         const height = args.height === undefined ? DEFAULT_SIZE : dimension(args.height, "height")
         return wasm.Manifold.cylinder(height, radius, radius, CIRCULAR_SEGMENTS, true)
     }
-    throw new Error(`unknown shape "${String(shape)}" — expected cube, sphere, or cylinder`)
+    if (shape === "cone") {
+        // radius_top may be 0 (a pointed apex), so it is validated as non-negative, not positive.
+        return makeCone(wasm, {
+            radiusBottom: dimension(args.radius_bottom, "radius_bottom"),
+            radiusTop: nonNegative(args.radius_top, "radius_top"),
+            height: dimension(args.height, "height"),
+            segments: CIRCULAR_SEGMENTS
+        })
+    }
+    if (shape === "tube") {
+        return makeTube(wasm, {
+            outerRadius: dimension(args.outer_radius, "outer_radius"),
+            wall: dimension(args.wall, "wall"),
+            height: dimension(args.height, "height"),
+            segments: CIRCULAR_SEGMENTS
+        })
+    }
+    if (shape === "chamfered_box") {
+        return makeChamferedBox(wasm, {
+            sizeX: dimension(args.size_x, "size_x"),
+            sizeY: dimension(args.size_y, "size_y"),
+            sizeZ: dimension(args.size_z, "size_z"),
+            chamfer: dimension(args.chamfer, "chamfer")
+        })
+    }
+    throw new Error(`unknown shape "${String(shape)}" — expected cube, sphere, cylinder, cone, tube, or chamfered_box`)
 }
 
 /** Translate a manifold to (x, y, z), deleting the input and returning the moved handle. */
@@ -187,8 +299,51 @@ const moveTo = (solid: Manifold, x: number, y: number, z: number): Manifold => {
     return moved
 }
 
-/** Validity gate mirroring the rest of the codebase: empty / errored / non-positive volume is bad. */
-const isInvalid = (m: Manifold): boolean => m.isEmpty() || m.status() !== "NoError" || m.volume() <= 0
+/** Validate that `value` is a known fit preset, returning it typed. Throws otherwise. */
+const asFit = (value: unknown): Fit => {
+    if (typeof value !== "string" || !(value in FIT_PRESETS)) {
+        throw new Error(`fit must be one of ${Object.keys(FIT_PRESETS).join(", ")}`)
+    }
+    return value as Fit
+}
+
+/**
+ * Oversize a cut primitive's dimensions so a nominal-size part drops into the
+ * pocket with the chosen clearance ON EACH SIDE. Returns a NEW arg bag — the
+ * original is untouched. The clearance is applied per side, so a cube/box grows
+ * by `2·clearance` on every full dimension (one clearance per face), while radii
+ * grow by one clearance (radial = per-side). Height is left unchanged so the
+ * pocket stays as deep as requested.
+ */
+const oversizeForFit = (args: Record<string, unknown>, fit: Fit, printerOffset: number): Record<string, unknown> => {
+    const c = clearanceFor(fit, printerOffset)
+    const adjusted: Record<string, unknown> = { ...args }
+    const grow = (key: string, by: number, fallback: number) => {
+        const base = args[key] === undefined ? fallback : dimension(args[key], key)
+        adjusted[key] = base + by
+    }
+    if (args.shape === "cube") {
+        grow("size_x", 2 * c, DEFAULT_SIZE)
+        grow("size_y", 2 * c, DEFAULT_SIZE)
+        grow("size_z", 2 * c, DEFAULT_SIZE)
+    } else if (args.shape === "chamfered_box") {
+        // chamfered_box requires explicit dims; no default fallback.
+        adjusted.size_x = dimension(args.size_x, "size_x") + 2 * c
+        adjusted.size_y = dimension(args.size_y, "size_y") + 2 * c
+        adjusted.size_z = dimension(args.size_z, "size_z") + 2 * c
+    } else if (args.shape === "sphere") {
+        grow("radius", c, DEFAULT_SIZE)
+    } else if (args.shape === "cylinder") {
+        grow("radius", c, DEFAULT_SIZE)
+    } else if (args.shape === "cone") {
+        // radius_top may be 0; grow both radii radially. Height unchanged.
+        adjusted.radius_bottom = dimension(args.radius_bottom, "radius_bottom") + c
+        adjusted.radius_top = nonNegative(args.radius_top, "radius_top") + c
+    } else if (args.shape === "tube") {
+        adjusted.outer_radius = dimension(args.outer_radius, "outer_radius") + c
+    }
+    return adjusted
+}
 
 /**
  * Apply a single named CSG edit and return a NEW Manifold.
@@ -212,7 +367,12 @@ export const applyEdit = (wasm: ManifoldToplevel, source: Manifold | null, name:
         if (!source) {
             throw new Error("no editable solid — create a primitive or import an STL first")
         }
-        const radius = dimension(a.radius, "radius")
+        const nominalRadius = dimension(a.radius, "radius")
+        // With a fit, the hole is sized UP from the nominal radius to receive a peg of that radius.
+        const radius =
+            a.fit === undefined
+                ? nominalRadius
+                : holeForPeg(nominalRadius, asFit(a.fit), optionalFinite(a.printer_offset, "printer_offset") ?? 0)
         const depth = dimension(a.depth, "depth")
         const axis = a.axis
         const x = position(a.x, "x")
@@ -239,7 +399,13 @@ export const applyEdit = (wasm: ManifoldToplevel, source: Manifold | null, name:
         if (!source) {
             throw new Error("no editable solid — create a primitive or import an STL first")
         }
-        const primitive = buildPrimitive(wasm, a)
+        // cut_primitive alone honours fit: oversize the cutter per side so a
+        // nominal-size part drops into the resulting pocket. add/intersect ignore fit.
+        const buildArgs =
+            name === "cut_primitive" && a.fit !== undefined
+                ? oversizeForFit(a, asFit(a.fit), optionalFinite(a.printer_offset, "printer_offset") ?? 0)
+                : a
+        const primitive = buildPrimitive(wasm, buildArgs)
         const placed = moveTo(primitive, position(a.x, "x"), position(a.y, "y"), position(a.z, "z"))
         if (name === "add_primitive") {
             result = source.add(placed)
@@ -249,13 +415,16 @@ export const applyEdit = (wasm: ManifoldToplevel, source: Manifold | null, name:
             result = source.intersect(placed)
         }
         placed.delete()
+    } else if (name === "hollow") {
+        if (!source) {
+            throw new Error("no editable solid — create a primitive or import an STL first")
+        }
+        const wall = dimension(a.wall, "wall")
+        result = makeShell(wasm, { solid: source, wall })
     } else {
         throw new Error(`unknown edit "${name}"`)
     }
 
-    if (isInvalid(result)) {
-        result.delete()
-        throw new Error("edit produced an empty or invalid solid")
-    }
+    assertValidSolid(result, "edit produced an empty or invalid solid")
     return result
 }
