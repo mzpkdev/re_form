@@ -1,6 +1,7 @@
 import { useState } from "react"
 import { AssistantPanel } from "./components/AssistantPanel"
 import { SettingsView } from "./components/SettingsView"
+import { ShufflePanel } from "./components/ShufflePanel"
 import { Sidebar } from "./components/Sidebar"
 import { ToolsPanel } from "./components/ToolsPanel"
 import { TopBar } from "./components/TopBar"
@@ -12,7 +13,7 @@ import { exportStl } from "./lib/stl"
 
 export const App = () => {
     const [view, setView] = useState<"editor" | "settings">("editor")
-    const [activePanel, setActivePanel] = useState<"ai" | "tools" | null>(null)
+    const [activePanel, setActivePanel] = useState<"ai" | "tools" | "shuffle" | null>(null)
     const [stlFile, setStlFile] = useState<File | null>(null)
     const [transform, setTransform] = useState<Transform>(IDENTITY_TRANSFORM)
 
@@ -45,6 +46,7 @@ export const App = () => {
                     transform={transform}
                     onChange={setTransform}
                 />
+                <ShufflePanel open={activePanel === "shuffle"} onClose={() => setActivePanel(null)} />
                 <AssistantPanel
                     open={activePanel === "ai"}
                     onClose={() => setActivePanel(null)}

@@ -1,7 +1,7 @@
-import { Bot, Wrench } from "lucide-react"
+import { Bot, Shuffle, Wrench } from "lucide-react"
 import { cn } from "../design/cn"
 
-type Panel = "ai" | "tools"
+type Panel = "ai" | "tools" | "shuffle"
 
 const NavItem = ({
     icon: Icon,
@@ -46,6 +46,12 @@ export const Sidebar = ({
         </div>
         <nav className="flex flex-1 flex-col gap-2 py-4">
             <NavItem icon={Wrench} label="Tools" active={activePanel === "tools"} onClick={() => onSelect("tools")} />
+            <NavItem
+                icon={Shuffle}
+                label="Shuffle"
+                active={activePanel === "shuffle"}
+                onClick={() => onSelect("shuffle")}
+            />
             <NavItem icon={Bot} label="AI Assistant" active={activePanel === "ai"} onClick={() => onSelect("ai")} />
         </nav>
         <div className="border-t border-on-surface/10 p-6">
