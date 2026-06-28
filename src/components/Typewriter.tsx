@@ -12,14 +12,25 @@ import { useEffect, useRef, useState } from "react"
 export const Typewriter = ({
     text,
     charsPerSecond = 160,
-    className
+    className,
+    onDone
 }: {
     text: string
     charsPerSecond?: number
     className?: string
+    onDone?: () => void
 }) => {
     const [shown, setShown] = useState(0)
     const shownRef = useRef(0)
+
+    // Fire whenever the full text is revealed — including when it was already
+    // fully shown the moment a handler became available, not just at the end of
+    // an animation frame. The caller's handler is idempotent.
+    useEffect(() => {
+        if (shown >= text.length) {
+            onDone?.()
+        }
+    }, [shown, text.length, onDone])
 
     useEffect(() => {
         // Text was replaced by something shorter (or reset) — snap, don't animate.
