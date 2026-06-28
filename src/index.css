@@ -18,6 +18,10 @@
     --color-on-secondary: #ffffff;
     --color-tertiary: #5d5e60;
 
+    /* ---- Color · Status ---- */
+    --color-success: #4ade80;
+    --color-error: #f87171;
+
     /* ---- Color · Surface & background ---- */
     --color-background: #faf9fe;
     --color-on-background: #1a1b1f;

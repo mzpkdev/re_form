@@ -4,18 +4,16 @@ import { cn } from "../design/cn"
 
 type View = "editor" | "settings"
 
-const stub = () => {
-    console.debug("TopBar action stub")
-}
-
 export const TopBar = ({
     view,
     onNavigate,
-    onImport
+    onImport,
+    onExport
 }: {
     view: View
     onNavigate: (view: View) => void
     onImport: (file: File) => void
+    onExport?: () => void
 }) => {
     const [fileMenuOpen, setFileMenuOpen] = useState(false)
     const fileRef = useRef<HTMLDivElement>(null)
@@ -109,7 +107,7 @@ export const TopBar = ({
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={closeAfter(stub)}
+                                    onClick={closeAfter(() => onExport?.())}
                                     className="flex w-full items-center gap-3 px-4 py-2 text-sm text-on-surface transition-colors hover:bg-surface-container hover:text-primary"
                                 >
                                     <Download className="size-4" />

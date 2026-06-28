@@ -1,28 +1,20 @@
+import { useMutation } from "@tanstack/react-query"
 import { Bot, ChevronLeft, Eye, EyeOff } from "lucide-react"
-import { useEffect, useRef, useState } from "react"
+import { useState } from "react"
 import { cn } from "../design/cn"
+import { useApiKey, useBaseUrl, useModel } from "../hooks/useApiConfig"
+import { DEFAULT_BASE_URL, DEFAULT_MODEL, verifyKey } from "../lib/openrouter"
 
 const SECTIONS = [{ icon: Bot, label: "AI Assistant", active: true }]
 
 const DEFAULT_STATUS = "Stored locally in your browser — never sent to our servers."
 
 export const SettingsView = ({ onClose }: { onClose: () => void }) => {
-    const [apiKey, setApiKey] = useState("")
+    const { apiKey, setApiKey } = useApiKey()
+    const { baseUrl, setBaseUrl } = useBaseUrl()
+    const { model, setModel } = useModel()
     const [visible, setVisible] = useState(false)
-    const [status, setStatus] = useState<{ text: string; tone: "muted" | "accent" }>({
-        text: DEFAULT_STATUS,
-        tone: "muted"
-    })
-    const testTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined)
-
-    useEffect(() => () => clearTimeout(testTimer.current), [])
-
-    const test = () => {
-        setStatus({ text: "Testing…", tone: "muted" })
-        testTimer.current = setTimeout(() => {
-            setStatus({ text: apiKey.trim() ? "✓ Connection OK" : "Enter an API key first", tone: "accent" })
-        }, 600)
-    }
+    const test = useMutation({ mutationFn: () => verifyKey(apiKey, baseUrl) })
 
     return (
         <div className="flex min-h-0 flex-1">
@@ -77,7 +69,7 @@ export const SettingsView = ({ onClose }: { onClose: () => void }) => {
                                     type={visible ? "text" : "password"}
                                     value={apiKey}
                                     onChange={(event) => setApiKey(event.target.value)}
-                                    placeholder="sk-ant-api03-…"
+                                    placeholder="sk-or-v1-…"
                                     className="w-full rounded-none border-0 border-b-2 border-on-surface bg-surface-container-low px-2.5 py-2 font-mono text-mono-data text-on-surface placeholder:text-tertiary focus:border-primary focus:outline-none"
                                 />
                                 <button
@@ -93,19 +85,70 @@ export const SettingsView = ({ onClose }: { onClose: () => void }) => {
                                 <span
                                     className={cn(
                                         "font-mono text-tiny",
-                                        status.tone === "accent" ? "text-primary" : "text-tertiary"
+                                        test.isSuccess && "text-success",
+                                        test.isError && "text-error",
+                                        (test.isIdle || test.isPending) && "text-tertiary"
                                     )}
                                 >
-                                    {status.text}
+                                    {test.isSuccess
+                                        ? `✓ Connected — ${test.data.label}`
+                                        : test.isError
+                                          ? `✗ ${test.error.message}`
+                                          : test.isPending
+                                            ? "Testing…"
+                                            : DEFAULT_STATUS}
                                 </span>
                                 <button
                                     type="button"
-                                    onClick={test}
-                                    className="shrink-0 border border-primary px-3 py-1 font-mono text-label-caps text-primary transition-colors hover:bg-surface-container"
+                                    onClick={() => test.mutate()}
+                                    disabled={!apiKey.trim() || test.isPending}
+                                    className="shrink-0 border border-primary px-3 py-1 font-mono text-label-caps text-primary transition-colors hover:bg-surface-container disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     Test connection
                                 </button>
                             </div>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            <span className="font-sans text-body-sm text-on-surface">API base URL</span>
+                            <input
+                                type="text"
+                                value={baseUrl}
+                                onChange={(event) => setBaseUrl(event.target.value)}
+                                placeholder={DEFAULT_BASE_URL}
+                                className="w-full rounded-none border-0 border-b-2 border-on-surface bg-surface-container-low px-2.5 py-2 font-mono text-mono-data text-on-surface placeholder:text-tertiary focus:border-primary focus:outline-none"
+                            />
+                            <div className="flex items-center gap-2">
+                                <span className="font-mono text-tiny text-tertiary">Presets</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setBaseUrl("https://openrouter.ai/api/v1")}
+                                    className="border border-on-surface/20 px-2 py-1 font-mono text-tiny text-tertiary transition-colors hover:border-primary hover:text-primary"
+                                >
+                                    OpenRouter
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setBaseUrl("https://api.openai.com/v1")}
+                                    className="border border-on-surface/20 px-2 py-1 font-mono text-tiny text-tertiary transition-colors hover:border-primary hover:text-primary"
+                                >
+                                    OpenAI
+                                </button>
+                            </div>
+                        </div>
+
+                        <div className="flex flex-col gap-2">
+                            <span className="font-sans text-body-sm text-on-surface">Model</span>
+                            <input
+                                type="text"
+                                value={model}
+                                onChange={(event) => setModel(event.target.value)}
+                                placeholder={DEFAULT_MODEL}
+                                className="w-full rounded-none border-0 border-b-2 border-on-surface bg-surface-container-low px-2.5 py-2 font-mono text-mono-data text-on-surface placeholder:text-tertiary focus:border-primary focus:outline-none"
+                            />
+                            <span className="font-mono text-tiny text-tertiary">
+                                e.g. anthropic/claude-sonnet-4.6 (OpenRouter) or gpt-4o (OpenAI)
+                            </span>
                         </div>
                     </div>
                 </div>

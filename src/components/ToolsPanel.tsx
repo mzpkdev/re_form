@@ -5,11 +5,22 @@ import type { Transform, Vec3 } from "../lib/model"
 
 type Axis = 0 | 1 | 2
 
-const NumField = ({ axis, value, onCommit }: { axis: string; value: number; onCommit: (next: number) => void }) => (
+const NumField = ({
+    axis,
+    value,
+    onCommit,
+    step = 1
+}: {
+    axis: string
+    value: number
+    onCommit: (next: number) => void
+    step?: number
+}) => (
     <div className="flex flex-1 items-center gap-1">
         <span className="font-mono text-tiny text-tertiary">{axis}</span>
         <input
             type="number"
+            step={step}
             value={value}
             onChange={(event) => {
                 const parsed = Number.parseFloat(event.target.value)
@@ -28,12 +39,14 @@ const TransformRow = ({
     label,
     values,
     onAxis,
-    action
+    action,
+    step
 }: {
     label: string
     values: Vec3
     onAxis: (axis: Axis, next: number) => void
     action?: ReactNode
+    step?: number
 }) => (
     <div className="flex flex-col gap-2">
         <div className="flex items-center justify-between">
@@ -41,9 +54,9 @@ const TransformRow = ({
             {action}
         </div>
         <div className="flex gap-2">
-            <NumField axis="X" value={values[0]} onCommit={(next) => onAxis(0, next)} />
-            <NumField axis="Y" value={values[1]} onCommit={(next) => onAxis(1, next)} />
-            <NumField axis="Z" value={values[2]} onCommit={(next) => onAxis(2, next)} />
+            <NumField axis="X" value={values[0]} onCommit={(next) => onAxis(0, next)} step={step} />
+            <NumField axis="Y" value={values[1]} onCommit={(next) => onAxis(1, next)} step={step} />
+            <NumField axis="Z" value={values[2]} onCommit={(next) => onAxis(2, next)} step={step} />
         </div>
     </div>
 )
@@ -118,6 +131,7 @@ export const ToolsPanel = ({
                             label="Scale"
                             values={transform.scale}
                             onAxis={setScaleAxis}
+                            step={0.1}
                             action={
                                 <button
                                     type="button"

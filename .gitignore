@@ -39,6 +39,9 @@ bun-debug.log*
 .env.*
 !.env.example
 
+# Secrets
+.secret
+
 # Editors
 .vscode/*
 !.vscode/extensions.json

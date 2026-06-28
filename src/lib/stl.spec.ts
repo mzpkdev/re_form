@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test"
 import * as THREE from "three"
-import { parseStl } from "./stl"
+import { exportStl, parseStl } from "./stl"
 
 const context = describe
 
@@ -37,6 +37,38 @@ describe("stl", () => {
             expect(Number.isFinite(size?.y)).toBe(true)
             expect(Number.isFinite(size?.z)).toBe(true)
             expect(size?.length()).toBeGreaterThan(0)
+        })
+    })
+
+    context("exportStl", () => {
+        it("writes a binary STL whose triangle-count header matches the geometry", () => {
+            // A box is 12 triangles (2 per face × 6 faces).
+            const geometry = new THREE.BoxGeometry(10, 10, 10)
+            const expectedTriangles = geometry.getIndex()
+                ? (geometry.getIndex() as THREE.BufferAttribute).count / 3
+                : geometry.getAttribute("position").count / 3
+
+            const buffer = exportStl(geometry)
+            expect(buffer).toBeInstanceOf(ArrayBuffer)
+            // 80-byte header + 4-byte count + 50 bytes per triangle.
+            expect(buffer.byteLength).toBeGreaterThanOrEqual(84)
+            const triangleCount = new DataView(buffer).getUint32(80, true)
+            expect(triangleCount).toBe(expectedTriangles)
+            expect(buffer.byteLength).toBe(84 + 50 * triangleCount)
+
+            geometry.dispose()
+        })
+
+        it("round-trips through parseStl back to the same triangle count", () => {
+            const geometry = new THREE.BoxGeometry(10, 10, 10)
+            const expectedTriangles = new DataView(exportStl(geometry)).getUint32(80, true)
+
+            const reparsed = parseStl(exportStl(geometry))
+            // STLLoader yields a non-indexed soup: 3 vertices per triangle.
+            expect(reparsed.getAttribute("position").count / 3).toBe(expectedTriangles)
+
+            geometry.dispose()
+            reparsed.dispose()
         })
     })
 })

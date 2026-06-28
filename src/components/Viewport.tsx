@@ -1,9 +1,9 @@
-import type { Manifold } from "manifold-3d"
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
 import { initManifold } from "../lib/manifold"
 import { geometryToManifold, type Transform, transformedGeometry } from "../lib/model"
+import { getManifold, setManifold, useModelVersion } from "../lib/modelStore"
 import { parseStl } from "../lib/stl"
 
 export const Viewport = ({ file, transform }: { file: File | null; transform: Transform }) => {
@@ -12,20 +12,21 @@ export const Viewport = ({ file, transform }: { file: File | null; transform: Tr
     const sceneRef = useRef<THREE.Scene | null>(null)
     const cameraRef = useRef<THREE.PerspectiveCamera | null>(null)
     const controlsRef = useRef<OrbitControls | null>(null)
-    // The displayed mesh and the source Manifold the transform effect transforms.
-    // Shared across the [file] and [transform] effects, so they live in refs.
+    // The displayed mesh and the material it is built with. The live source
+    // Manifold now lives in the module store (modelStore) — the STL importer and
+    // the AI executor both feed setManifold, so the Viewport no longer owns the
+    // handle. The re-bake effect derives geometry from getManifold().
     const meshRef = useRef<THREE.Mesh | null>(null)
-    const sourceManifoldRef = useRef<Manifold | null>(null)
-    // Mirrors the latest transform so the async [file] load can bake it in
-    // without depending on `transform` — that would re-load + re-frame on every
-    // edit. The [transform] effect owns subsequent re-bakes.
-    const transformRef = useRef(transform)
-    transformRef.current = transform
+    const materialRef = useRef<THREE.MeshStandardMaterial | null>(null)
     const [nonManifold, setNonManifold] = useState(false)
+    // Bumped by the store on every setManifold; drives the re-bake effect.
+    const modelVersion = useModelVersion()
 
-    // Mount: own the renderer / scene / camera / controls / loop for the
-    // section's lifetime. StrictMode double-mounts effects in dev, so cleanup
-    // must fully tear down — no orphaned canvas or renderer.
+    // Mount: own the renderer / scene / camera / controls / loop / material for
+    // the section's lifetime. StrictMode double-mounts effects in dev, so cleanup
+    // must fully tear down — no orphaned canvas, renderer or material. The
+    // material is created once here so the re-bake effect can build meshes with
+    // it across model versions.
     useEffect(() => {
         const section = sectionRef.current
         if (!section) {
@@ -51,10 +52,17 @@ export const Viewport = ({ file, transform }: { file: File | null; transform: Tr
         const controls = new OrbitControls(camera, renderer.domElement)
         controls.enableDamping = true
 
+        const material = new THREE.MeshStandardMaterial({
+            color: 0xec6530,
+            roughness: 0.55,
+            metalness: 0.1
+        })
+
         rendererRef.current = renderer
         sceneRef.current = scene
         cameraRef.current = camera
         controlsRef.current = controls
+        materialRef.current = material
 
         let frame = 0
         const renderLoop = () => {
@@ -83,36 +91,33 @@ export const Viewport = ({ file, transform }: { file: File | null; transform: Tr
             controls.dispose()
             renderer.dispose()
             renderer.domElement.remove()
+            material.dispose()
             rendererRef.current = null
             sceneRef.current = null
             cameraRef.current = null
             controlsRef.current = null
+            materialRef.current = null
         }
     }, [])
 
-    // Load the picked STL, build a source Manifold from it, render the identity
-    // geometry and frame the camera. The Manifold is the master copy the
-    // transform effect derives baked geometry from. A stale async result is
-    // dropped via `aborted` when `file` changes mid-load. If the mesh is not
-    // manifold we fall back to rendering the raw parsed STL (untransformed) and
-    // surface a notice rather than crashing. Cleanup disposes the GPU geometry/
-    // material and the Manifold handle — all resources the Viewport owns.
+    // Load the picked STL and feed the source Manifold to the store. A stale
+    // async result is dropped via `aborted` when `file` changes mid-load. On a
+    // manifold mesh we store the handle and let the re-bake effect build the
+    // geometry and frame the camera. On a non-manifold mesh we clear the store
+    // and render the raw parsed STL directly, surfacing a notice rather than
+    // crashing. The store owns the Manifold's lifetime now — cleanup never
+    // deletes it; it only tears down the GPU geometry this effect may have added.
     useEffect(() => {
         const scene = sceneRef.current
         const camera = cameraRef.current
         const controls = controlsRef.current
-        if (!file || !scene || !camera || !controls) {
+        const material = materialRef.current
+        if (!file || !scene || !camera || !controls || !material) {
             return
         }
 
         let aborted = false
         setNonManifold(false)
-
-        const material = new THREE.MeshStandardMaterial({
-            color: 0xec6530,
-            roughness: 0.55,
-            metalness: 0.1
-        })
 
         file.arrayBuffer()
             .then(async (data) => {
@@ -125,39 +130,38 @@ export const Viewport = ({ file, transform }: { file: File | null; transform: Tr
                         parsed.dispose()
                         return
                     }
-                    // Try to build the source Manifold. transformedGeometry below
-                    // owns the rendered geometry; on failure we render `parsed`.
-                    let geometry: THREE.BufferGeometry
+                    // Try to build the source Manifold. On success the store
+                    // takes ownership and the re-bake effect renders + frames; on
+                    // failure we render the raw parsed geometry here.
                     try {
                         const source = geometryToManifold(wasm, parsed)
-                        sourceManifoldRef.current = source
-                        geometry = transformedGeometry(source, transformRef.current)
+                        setManifold(source)
                         parsed.dispose()
                     } catch (error) {
                         console.warn("Viewport: STL is not manifold, rendering raw geometry", error)
                         setNonManifold(true)
-                        geometry = parsed
-                    }
+                        setManifold(null)
 
-                    const mesh = new THREE.Mesh(geometry, material)
-                    meshRef.current = mesh
-                    scene.add(mesh)
+                        const mesh = new THREE.Mesh(parsed, material)
+                        meshRef.current = mesh
+                        scene.add(mesh)
 
-                    // Frame the camera around the mesh on load only.
-                    geometry.computeBoundingBox()
-                    const box = geometry.boundingBox
-                    if (box) {
-                        const center = box.getCenter(new THREE.Vector3())
-                        const radius = box.getSize(new THREE.Vector3()).length() / 2 || 1
-                        const distance = radius / Math.sin(THREE.MathUtils.degToRad(camera.fov) / 2)
-                        camera.position
-                            .copy(center)
-                            .add(new THREE.Vector3(1, 0.8, 1).normalize().multiplyScalar(distance))
-                        camera.near = Math.max(distance / 100, 0.1)
-                        camera.far = distance * 100
-                        camera.updateProjectionMatrix()
-                        controls.target.copy(center)
-                        controls.update()
+                        // Frame the camera around the raw mesh on load.
+                        parsed.computeBoundingBox()
+                        const box = parsed.boundingBox
+                        if (box) {
+                            const center = box.getCenter(new THREE.Vector3())
+                            const radius = box.getSize(new THREE.Vector3()).length() / 2 || 1
+                            const distance = radius / Math.sin(THREE.MathUtils.degToRad(camera.fov) / 2)
+                            camera.position
+                                .copy(center)
+                                .add(new THREE.Vector3(1, 0.8, 1).normalize().multiplyScalar(distance))
+                            camera.near = Math.max(distance / 100, 0.1)
+                            camera.far = distance * 100
+                            camera.updateProjectionMatrix()
+                            controls.target.copy(center)
+                            controls.update()
+                        }
                     }
                 })
             })
@@ -175,27 +179,56 @@ export const Viewport = ({ file, transform }: { file: File | null; transform: Tr
                 mesh.geometry.dispose()
                 meshRef.current = null
             }
-            material.dispose()
-            sourceManifoldRef.current?.delete()
-            sourceManifoldRef.current = null
         }
     }, [file])
 
-    // Re-bake the geometry whenever the transform changes. Only runs once a
-    // source Manifold exists (manifold STL imported). Swaps the mesh geometry
-    // and disposes the previous one; the camera is intentionally left alone so
-    // editing transforms does not re-frame the view.
+    // Re-bake the displayed geometry whenever the model version (a setManifold
+    // anywhere) or the transform changes. Reads the live Manifold from the store
+    // and bakes the transform into a fresh BufferGeometry. If a mesh already
+    // exists we swap its geometry and dispose the previous one. If none exists we
+    // create the mesh, add it and frame the camera. Framing happens EXACTLY when
+    // the mesh is first created (file load, or the first AI primitive from an
+    // empty scene); transform tweaks and edits that swap an existing mesh's
+    // geometry must not reframe.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: modelVersion gates the re-bake; getManifold() reads the latest handle.
     useEffect(() => {
-        const source = sourceManifoldRef.current
-        const mesh = meshRef.current
-        if (!source || !mesh) {
+        const m = getManifold()
+        const scene = sceneRef.current
+        const camera = cameraRef.current
+        const controls = controlsRef.current
+        const material = materialRef.current
+        if (!m || !scene || !camera || !controls || !material) {
             return
         }
-        const next = transformedGeometry(source, transform)
-        const previous = mesh.geometry
-        mesh.geometry = next
-        previous.dispose()
-    }, [transform])
+
+        const next = transformedGeometry(m, transform)
+        const mesh = meshRef.current
+        if (mesh) {
+            const previous = mesh.geometry
+            mesh.geometry = next
+            previous.dispose()
+            return
+        }
+
+        const created = new THREE.Mesh(next, material)
+        meshRef.current = created
+        scene.add(created)
+
+        // Frame the camera around the mesh, but only on first creation.
+        next.computeBoundingBox()
+        const box = next.boundingBox
+        if (box) {
+            const center = box.getCenter(new THREE.Vector3())
+            const radius = box.getSize(new THREE.Vector3()).length() / 2 || 1
+            const distance = radius / Math.sin(THREE.MathUtils.degToRad(camera.fov) / 2)
+            camera.position.copy(center).add(new THREE.Vector3(1, 0.8, 1).normalize().multiplyScalar(distance))
+            camera.near = Math.max(distance / 100, 0.1)
+            camera.far = distance * 100
+            camera.updateProjectionMatrix()
+            controls.target.copy(center)
+            controls.update()
+        }
+    }, [modelVersion, transform])
 
     return (
         <section ref={sectionRef} className="relative flex-1 overflow-hidden bg-3d-grid">

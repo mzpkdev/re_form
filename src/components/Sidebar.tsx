@@ -3,10 +3,6 @@ import { cn } from "../design/cn"
 
 type Panel = "ai" | "tools"
 
-const stub = () => {
-    console.debug("EXPORT_STL: not implemented")
-}
-
 const NavItem = ({
     icon: Icon,
     label,
@@ -34,7 +30,15 @@ const NavItem = ({
     </button>
 )
 
-export const Sidebar = ({ activePanel, onSelect }: { activePanel: Panel | null; onSelect: (panel: Panel) => void }) => (
+export const Sidebar = ({
+    activePanel,
+    onSelect,
+    onExport
+}: {
+    activePanel: Panel | null
+    onSelect: (panel: Panel) => void
+    onExport?: () => void
+}) => (
     <aside className="flex h-full w-sidebar flex-col border-r border-on-surface/10 bg-surface">
         <div className="border-b border-on-surface/10 bg-primary p-6">
             <div className="mb-1 font-mono text-label-caps uppercase tracking-widest text-on-primary/70">EDITOR</div>
@@ -47,7 +51,7 @@ export const Sidebar = ({ activePanel, onSelect }: { activePanel: Panel | null; 
         <div className="border-t border-on-surface/10 p-6">
             <button
                 type="button"
-                onClick={stub}
+                onClick={() => onExport?.()}
                 className="w-full border border-transparent bg-primary py-3 font-mono text-label-caps text-on-primary transition-colors chamfer hover:border-on-surface hover:bg-primary-container hover:text-on-primary-container"
             >
                 EXPORT_STL

@@ -1,4 +1,5 @@
 import { describe, expect, it, mock, spyOn } from "bun:test"
+import type { ChatChunk } from "./openrouter"
 import { streamChat, verifyKey } from "./openrouter"
 
 const context = describe
@@ -15,13 +16,18 @@ const streamResponse = (chunks: string[]): Response => {
     return new Response(body, { status: 200 })
 }
 
-const collect = async (stream: AsyncGenerator<string>): Promise<string[]> => {
-    const out: string[] = []
-    for await (const delta of stream) {
-        out.push(delta)
+const collect = async (stream: AsyncGenerator<ChatChunk>): Promise<ChatChunk[]> => {
+    const out: ChatChunk[] = []
+    for await (const chunk of stream) {
+        out.push(chunk)
     }
     return out
 }
+
+const textValues = (chunks: ChatChunk[]): string[] =>
+    chunks
+        .filter((chunk): chunk is { type: "text"; value: string } => chunk.type === "text")
+        .map((chunk) => chunk.value)
 
 describe("openrouter", () => {
     context("streamChat", () => {
@@ -34,9 +40,9 @@ describe("openrouter", () => {
                 ])
             )
 
-            const deltas = await collect(streamChat({ apiKey: "k", messages: [{ role: "user", content: "hi" }] }))
+            const chunks = await collect(streamChat({ apiKey: "k", messages: [{ role: "user", content: "hi" }] }))
 
-            expect(deltas).toEqual(["Hel", "lo"])
+            expect(textValues(chunks)).toEqual(["Hel", "lo"])
         })
 
         it("parses a single SSE event split across two reads", async () => {
@@ -44,9 +50,9 @@ describe("openrouter", () => {
                 streamResponse(['data: {"choices":[{"delta":{"content":"Hi', '"}}]}\n\ndata: [DONE]\n\n'])
             )
 
-            const deltas = await collect(streamChat({ apiKey: "k", messages: [{ role: "user", content: "hi" }] }))
+            const chunks = await collect(streamChat({ apiKey: "k", messages: [{ role: "user", content: "hi" }] }))
 
-            expect(deltas).toEqual(["Hi"])
+            expect(textValues(chunks)).toEqual(["Hi"])
         })
 
         it("targets the overridden base URL", async () => {
@@ -88,6 +94,82 @@ describe("openrouter", () => {
             )
 
             expect(opened).toBe(1)
+        })
+
+        it("reassembles tool-call arguments split across two SSE lines into one ToolCall", async () => {
+            spyOn(global, "fetch").mockResolvedValue(
+                streamResponse([
+                    'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"resize","arguments":"{\\"sca"}}]}}]}\n\n',
+                    'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"le\\":2}"}}]}}]}\n\n',
+                    'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+                    "data: [DONE]\n\n"
+                ])
+            )
+
+            const chunks = await collect(streamChat({ apiKey: "k", messages: [{ role: "user", content: "hi" }] }))
+
+            expect(chunks).toEqual([
+                {
+                    type: "tool_calls",
+                    calls: [{ id: "call_1", type: "function", function: { name: "resize", arguments: '{"scale":2}' } }]
+                }
+            ])
+        })
+
+        it("yields exactly one tool_calls chunk when the stream finishes with tool_calls", async () => {
+            spyOn(global, "fetch").mockResolvedValue(
+                streamResponse([
+                    'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_1","function":{"name":"noop","arguments":"{}"}}]}}]}\n\n',
+                    'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+                    "data: [DONE]\n\n"
+                ])
+            )
+
+            const chunks = await collect(streamChat({ apiKey: "k", messages: [{ role: "user", content: "hi" }] }))
+
+            const toolChunks = chunks.filter((chunk) => chunk.type === "tool_calls")
+            expect(toolChunks).toHaveLength(1)
+        })
+
+        it("yields ordered text chunks and no tool_calls for plain content", async () => {
+            spyOn(global, "fetch").mockResolvedValue(
+                streamResponse([
+                    'data: {"choices":[{"delta":{"content":"a"}}]}\n\n',
+                    'data: {"choices":[{"delta":{"content":"b"}}]}\n\n',
+                    'data: {"choices":[{"delta":{},"finish_reason":"stop"}]}\n\n',
+                    "data: [DONE]\n\n"
+                ])
+            )
+
+            const chunks = await collect(streamChat({ apiKey: "k", messages: [{ role: "user", content: "hi" }] }))
+
+            expect(textValues(chunks)).toEqual(["a", "b"])
+            expect(chunks.some((chunk) => chunk.type === "tool_calls")).toBe(false)
+        })
+
+        it("assembles two parallel tool calls into two ToolCalls", async () => {
+            spyOn(global, "fetch").mockResolvedValue(
+                streamResponse([
+                    'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call_a","function":{"name":"first","arguments":"{\\"x\\":"}}]}}]}\n\n',
+                    'data: {"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call_b","function":{"name":"second","arguments":"{\\"y\\":"}}]}}]}\n\n',
+                    'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"1}"}}]}}]}\n\n',
+                    'data: {"choices":[{"delta":{"tool_calls":[{"index":1,"function":{"arguments":"2}"}}]}}]}\n\n',
+                    'data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}\n\n',
+                    "data: [DONE]\n\n"
+                ])
+            )
+
+            const chunks = await collect(streamChat({ apiKey: "k", messages: [{ role: "user", content: "hi" }] }))
+
+            expect(chunks).toEqual([
+                {
+                    type: "tool_calls",
+                    calls: [
+                        { id: "call_a", type: "function", function: { name: "first", arguments: '{"x":1}' } },
+                        { id: "call_b", type: "function", function: { name: "second", arguments: '{"y":2}' } }
+                    ]
+                }
+            ])
         })
     })
 
