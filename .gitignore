@@ -1,3 +1,5 @@
+__fixtures__/
+
 # Dependencies
 node_modules/
 .pnp
