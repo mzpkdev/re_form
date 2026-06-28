@@ -1,12 +1,21 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
+import { cn } from "../design/cn"
 import { initManifold } from "../lib/manifold"
 import { geometryToManifold, type Transform, transformedGeometry } from "../lib/model"
 import { getManifold, setManifold, useModelVersion } from "../lib/modelStore"
 import { parseStl } from "../lib/stl"
 
-export const Viewport = ({ file, transform }: { file: File | null; transform: Transform }) => {
+export const Viewport = ({
+    file,
+    transform,
+    hidden
+}: {
+    file: File | null
+    transform: Transform
+    hidden?: boolean
+}) => {
     const sectionRef = useRef<HTMLElement>(null)
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
     const sceneRef = useRef<THREE.Scene | null>(null)
@@ -231,7 +240,7 @@ export const Viewport = ({ file, transform }: { file: File | null; transform: Tr
     }, [modelVersion, transform])
 
     return (
-        <section ref={sectionRef} className="relative flex-1 overflow-hidden bg-3d-grid">
+        <section ref={sectionRef} className={cn("relative flex-1 overflow-hidden bg-3d-grid", hidden && "hidden")}>
             {nonManifold ? (
                 <div className="absolute inset-x-0 bottom-0 bg-surface-container px-4 py-2 text-center font-mono text-tiny text-on-surface-variant">
                     Mesh is not manifold — transforms are disabled.

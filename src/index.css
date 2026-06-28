@@ -76,6 +76,9 @@
 @utility w-panel {
     width: 360px;
 }
+@utility w-draw-panel {
+    width: 600px;
+}
 @utility h-toolbar {
     height: 64px;
 }

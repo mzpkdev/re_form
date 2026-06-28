@@ -1,6 +1,7 @@
 import { useState } from "react"
 import * as THREE from "three"
 import { AssistantPanel } from "./components/AssistantPanel"
+import { DrawingWorkspace } from "./components/DrawingWorkspace"
 import { SettingsView } from "./components/SettingsView"
 import { ShufflePanel } from "./components/ShufflePanel"
 import { Sidebar } from "./components/Sidebar"
@@ -19,7 +20,7 @@ const DEFAULT_PART_NAME = "model"
 
 export const App = () => {
     const [view, setView] = useState<"editor" | "settings">("editor")
-    const [activePanel, setActivePanel] = useState<"ai" | "tools" | "shuffle" | null>(null)
+    const [activePanel, setActivePanel] = useState<"ai" | "tools" | "shuffle" | "draw" | null>(null)
     const [stlFile, setStlFile] = useState<File | null>(null)
     const [transform, setTransform] = useState<Transform>(IDENTITY_TRANSFORM)
 
@@ -58,7 +59,11 @@ export const App = () => {
             <TopBar view={view} onNavigate={setView} onImport={setStlFile} onExport={handleExport} />
             <main className={cn("min-h-0 flex-1", view === "editor" ? "flex" : "hidden")}>
                 <Sidebar activePanel={activePanel} onSelect={setActivePanel} onExport={handleExport} />
-                <Viewport file={stlFile} transform={transform} />
+                {/* The 3D viewport stays mounted (WebGL preserved) and hides while the
+                    drawing canvas takes the center; the canvas + its right-side tools
+                    are the DrawingWorkspace, shown when the "Drawing" panel is active. */}
+                <Viewport file={stlFile} transform={transform} hidden={activePanel === "draw"} />
+                <DrawingWorkspace active={activePanel === "draw"} onClose={() => setActivePanel(null)} />
                 <ToolsPanel
                     open={activePanel === "tools"}
                     onClose={() => setActivePanel(null)}
