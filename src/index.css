@@ -22,6 +22,16 @@
     --color-success: #4ade80;
     --color-error: #f87171;
 
+    /* ---- Color · Drawing canvas ----
+       Stroke tokens for the 2D editor's SVG layers, tuned for the light
+       surface: a faint grid, a stronger origin axis, and the entity ink. */
+    --color-drawing-grid: #d6d4dc;
+    --color-drawing-axis: #a8a6ae;
+    --color-drawing-entity: #1a1b1f;
+    /* The in-progress rubber-band ghost: the primary accent so it reads as
+       "live, not yet committed" against the dark entity ink. */
+    --color-drawing-preview: #ec6530;
+
     /* ---- Color · Surface & background ---- */
     --color-background: #faf9fe;
     --color-on-background: #1a1b1f;

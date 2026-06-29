@@ -6,7 +6,15 @@
         "useIgnoreFile": true
     },
     "files": {
-        "includes": ["src/**/*.ts", "src/**/*.tsx", "vite.config.ts", "*.json", "!**/node_modules", "!bun.lock"]
+        "includes": [
+            "src/**/*.ts",
+            "src/**/*.tsx",
+            "vite.config.ts",
+            "*.json",
+            "!**/node_modules",
+            "!bun.lock",
+            "!**/.claude"
+        ]
     },
     "formatter": {
         "enabled": true,

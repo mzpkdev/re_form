@@ -6,6 +6,7 @@ import { meshToBufferGeometry } from "./lib/model"
 import { getManifold } from "./lib/modelStore"
 import { exportStl, verifyStlDimensions } from "./lib/stl"
 import { AssistantPanel, SettingsView } from "./modules/assistant"
+import { DrawingEditor } from "./modules/drawing"
 import { MeshToolsPanel } from "./modules/mesh-tools"
 import { ObfuscatePanel } from "./modules/obfuscate"
 import { Viewport } from "./modules/viewer"
@@ -16,7 +17,7 @@ import { Viewport } from "./modules/viewer"
 const DEFAULT_PART_NAME = "model"
 
 export const App = () => {
-    const [view, setView] = useState<"editor" | "settings">("editor")
+    const [view, setView] = useState<"editor" | "settings" | "draw">("editor")
     const [activePanel, setActivePanel] = useState<"ai" | "mesh" | "obfuscate" | null>(null)
     const [stlFile, setStlFile] = useState<File | null>(null)
 
@@ -60,6 +61,11 @@ export const App = () => {
                 <ObfuscatePanel open={activePanel === "obfuscate"} onClose={() => setActivePanel(null)} />
                 <AssistantPanel open={activePanel === "ai"} onClose={() => setActivePanel(null)} />
             </main>
+            {view === "draw" ? (
+                <main className="flex min-h-0 flex-1">
+                    <DrawingEditor />
+                </main>
+            ) : null}
             {view === "settings" ? <SettingsView onClose={() => setView("editor")} /> : null}
         </div>
     )
