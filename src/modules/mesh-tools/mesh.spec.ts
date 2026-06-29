@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { readFileSync } from "node:fs"
+import { existsSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
 import type { Manifold } from "manifold-3d"
 import { initManifold } from "../../lib/manifold"
@@ -29,6 +29,13 @@ const vertexPositions = (manifold: Manifold): Float32Array => {
  * detailed model rather than a primitive. Caller owns the returned handle.
  */
 const FIXTURE = resolve(import.meta.dir, "../../../__fixtures__/Little_Opossum.stl")
+// The fixture is a large binary kept out of git (see .gitignore), so it only
+// exists locally. Skip the fixture-backed cases when it is absent (e.g. CI)
+// instead of crashing on ENOENT; they still run wherever the file is present.
+const hasFixture = existsSync(FIXTURE)
+if (!hasFixture) {
+    console.warn(`[mesh.spec] fixture absent — skipping fixture-backed tests: ${FIXTURE}`)
+}
 const loadFixture = (wasm: Awaited<ReturnType<typeof initManifold>>): Manifold => {
     const buf = readFileSync(FIXTURE)
     const ab = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength)
@@ -71,25 +78,29 @@ describe("mesh", () => {
         // on a curved model: past a sweet spot, a larger tolerance re-triangulates
         // collapsed regions and the count rises again. This guards the honest
         // labeling against a future "invert/relabel as reduction %" regression.
-        it("tolerance is a deviation budget, not a monotonic reduction knob (fixture)", async () => {
-            const wasm = await initManifold()
-            const src = loadFixture(wasm)
+        it.skipIf(!hasFixture)(
+            "tolerance is a deviation budget, not a monotonic reduction knob (fixture)",
+            async () => {
+                const wasm = await initManifold()
+                const src = loadFixture(wasm)
 
-            const at = (tol: number): number => {
-                const r = simplify(src, tol)
-                const tris = r.numTri()
-                expect(isValidSolid(r)).toBe(true)
-                r.delete()
-                return tris
-            }
-            const small = at(0.05)
-            const large = at(1.0)
-            // A larger tolerance yields MORE triangles here — the opposite of what a
-            // naive "higher = more reduction" reading expects, hence the honest label.
-            expect(large).toBeGreaterThan(small)
+                const at = (tol: number): number => {
+                    const r = simplify(src, tol)
+                    const tris = r.numTri()
+                    expect(isValidSolid(r)).toBe(true)
+                    r.delete()
+                    return tris
+                }
+                const small = at(0.05)
+                const large = at(1.0)
+                // A larger tolerance yields MORE triangles here — the opposite of what a
+                // naive "higher = more reduction" reading expects, hence the honest label.
+                expect(large).toBeGreaterThan(small)
 
-            src.delete()
-        }, 30000)
+                src.delete()
+            },
+            30000
+        )
     })
 
     context("smooth", () => {
@@ -116,18 +127,22 @@ describe("mesh", () => {
         // Regression: at the adaptive default refine, Smooth must stay within the
         // triangle budget on a detailed model (so it is not auto-disabled) and
         // still produce a valid solid.
-        it("at the adaptive default refine stays within the triangle budget (fixture)", async () => {
-            const wasm = await initManifold()
-            const src = loadFixture(wasm)
-            const factor = adaptiveRefine(src.numTri(), MAX_TRIANGLES)
+        it.skipIf(!hasFixture)(
+            "at the adaptive default refine stays within the triangle budget (fixture)",
+            async () => {
+                const wasm = await initManifold()
+                const src = loadFixture(wasm)
+                const factor = adaptiveRefine(src.numTri(), MAX_TRIANGLES)
 
-            const smoothed = smooth(src, { refine: factor })
-            expect(smoothed.numTri()).toBeLessThanOrEqual(MAX_TRIANGLES)
-            expect(isValidSolid(smoothed)).toBe(true)
+                const smoothed = smooth(src, { refine: factor })
+                expect(smoothed.numTri()).toBeLessThanOrEqual(MAX_TRIANGLES)
+                expect(isValidSolid(smoothed)).toBe(true)
 
-            src.delete()
-            smoothed.delete()
-        }, 30000)
+                src.delete()
+                smoothed.delete()
+            },
+            30000
+        )
     })
 
     context("adaptiveRefine", () => {
@@ -215,26 +230,30 @@ describe("mesh", () => {
         // raises VARY_MAX_AMPLITUDE back into the self-intersecting range this
         // fails. The displacement scales with the bbox diagonal, so the cap is the
         // worst case the panel can request.
-        it("stays a valid solid at VARY_MAX_AMPLITUDE across seeds (fixture)", async () => {
-            const wasm = await initManifold()
-            const src = loadFixture(wasm)
-            const factor = adaptiveRefine(src.numTri(), MAX_TRIANGLES)
+        it.skipIf(!hasFixture)(
+            "stays a valid solid at VARY_MAX_AMPLITUDE across seeds (fixture)",
+            async () => {
+                const wasm = await initManifold()
+                const src = loadFixture(wasm)
+                const factor = adaptiveRefine(src.numTri(), MAX_TRIANGLES)
 
-            for (const seed of [1, 7, 42, 123, 9999]) {
-                const r = vary(src, { amplitude: VARY_MAX_AMPLITUDE, seed, resolution: factor })
-                expect(isValidSolid(r)).toBe(true)
-                // And it survives the panel/export re-bake round-trip.
-                const geo = meshToBufferGeometry(r.getMesh())
-                const rebaked = geometryToManifold(wasm, geo)
-                expect(isValidSolid(rebaked)).toBe(true)
-                expect(() => exportStl(geo)).not.toThrow()
-                rebaked.delete()
-                geo.dispose()
-                r.delete()
-            }
+                for (const seed of [1, 7, 42, 123, 9999]) {
+                    const r = vary(src, { amplitude: VARY_MAX_AMPLITUDE, seed, resolution: factor })
+                    expect(isValidSolid(r)).toBe(true)
+                    // And it survives the panel/export re-bake round-trip.
+                    const geo = meshToBufferGeometry(r.getMesh())
+                    const rebaked = geometryToManifold(wasm, geo)
+                    expect(isValidSolid(rebaked)).toBe(true)
+                    expect(() => exportStl(geo)).not.toThrow()
+                    rebaked.delete()
+                    geo.dispose()
+                    r.delete()
+                }
 
-            src.delete()
-        }, 60000)
+                src.delete()
+            },
+            60000
+        )
 
         // Backstop for Defect 1: even within the cap, `warp` can't detect
         // self-intersection, so a pathological shape/seed can still fold. The op
