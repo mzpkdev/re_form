@@ -54,16 +54,18 @@ export const App = () => {
     return (
         <div className="flex h-screen w-screen flex-col overflow-hidden bg-background font-sans text-on-background">
             <TopBar view={view} onNavigate={setView} onImport={setStlFile} onExport={handleExport} />
-            <main className={cn("min-h-0 flex-1", view === "editor" ? "flex" : "hidden")}>
-                <Sidebar activePanel={activePanel} onSelect={setActivePanel} onExport={handleExport} />
-                <Viewport file={stlFile} />
-                <MeshToolsPanel open={activePanel === "mesh"} onClose={() => setActivePanel(null)} />
-                <ObfuscatePanel open={activePanel === "obfuscate"} onClose={() => setActivePanel(null)} />
-                <AssistantPanel open={activePanel === "ai"} onClose={() => setActivePanel(null)} />
-            </main>
+            {view !== "draw" ? (
+                <main className={cn("min-h-0 flex-1", view === "editor" ? "flex" : "hidden")}>
+                    <Sidebar activePanel={activePanel} onSelect={setActivePanel} onExport={handleExport} />
+                    <Viewport file={stlFile} />
+                    <MeshToolsPanel open={activePanel === "mesh"} onClose={() => setActivePanel(null)} />
+                    <ObfuscatePanel open={activePanel === "obfuscate"} onClose={() => setActivePanel(null)} />
+                    <AssistantPanel open={activePanel === "ai"} onClose={() => setActivePanel(null)} />
+                </main>
+            ) : null}
             {view === "draw" ? (
                 <main className="flex min-h-0 flex-1">
-                    <DrawingEditor />
+                    <DrawingEditor onShow3D={() => setView("editor")} />
                 </main>
             ) : null}
             {view === "settings" ? <SettingsView onClose={() => setView("editor")} /> : null}

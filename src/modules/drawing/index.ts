@@ -35,6 +35,7 @@ export {
     useGridSize,
     useHistory
 } from "./documentStore"
+export { ExtrudePanel } from "./ExtrudePanel"
 // Editor store: ephemeral, never-serialized editor state.
 export {
     clearSelection,
@@ -52,6 +53,8 @@ export {
     usePreview,
     useSelection
 } from "./editorStore"
+// Extrude bridge: pure 2D-profile → 3D-solid (manifold) construction.
+export { inferPlane, profileToManifold } from "./extrude"
 export { GridControl } from "./GridControl"
 // Pure pointer-vs-entity hit testing (the testable core of click selection).
 export { hitTest } from "./hitTest"
