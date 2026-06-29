@@ -14,7 +14,7 @@ export const Viewport = ({ file }: { file: File | null }) => {
     const controlsRef = useRef<OrbitControls | null>(null)
     // The displayed mesh and the material it is built with. The live source
     // Manifold now lives in the module store (modelStore) — the STL importer and
-    // Shuffle both feed setManifold, so the Viewport no longer owns the handle.
+    // Mesh Tools both feed setManifold, so the Viewport no longer owns the handle.
     // The re-bake effect derives geometry from getManifold().
     const meshRef = useRef<THREE.Mesh | null>(null)
     const materialRef = useRef<THREE.MeshStandardMaterial | null>(null)

@@ -3,7 +3,7 @@ import { useSyncExternalStore } from "react"
 
 /**
  * Module-level store for the single live editable Manifold. The STL importer
- * and Shuffle both feed this one setter, so the Viewport no longer owns the
+ * and Mesh Tools both feed this one setter, so the Viewport no longer owns the
  * handle. This store is the ONLY place `.delete()` is called on
  * the current handle — `setManifold` deletes the previous one before replacing
  * it. A version counter bumps on every set so `useSyncExternalStore` consumers

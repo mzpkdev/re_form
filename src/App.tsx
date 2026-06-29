@@ -6,7 +6,7 @@ import { meshToBufferGeometry } from "./lib/model"
 import { getManifold } from "./lib/modelStore"
 import { exportStl, verifyStlDimensions } from "./lib/stl"
 import { AssistantPanel, SettingsView } from "./modules/assistant"
-import { ShufflePanel } from "./modules/shuffle"
+import { MeshToolsPanel } from "./modules/mesh-tools"
 import { Viewport } from "./modules/viewer"
 
 // No naming UI yet; the export plumbing is structured so a part name could be
@@ -16,7 +16,7 @@ const DEFAULT_PART_NAME = "model"
 
 export const App = () => {
     const [view, setView] = useState<"editor" | "settings">("editor")
-    const [activePanel, setActivePanel] = useState<"ai" | "shuffle" | null>(null)
+    const [activePanel, setActivePanel] = useState<"ai" | "mesh" | null>(null)
     const [stlFile, setStlFile] = useState<File | null>(null)
 
     const handleExport = () => {
@@ -55,7 +55,7 @@ export const App = () => {
             <main className={cn("min-h-0 flex-1", view === "editor" ? "flex" : "hidden")}>
                 <Sidebar activePanel={activePanel} onSelect={setActivePanel} onExport={handleExport} />
                 <Viewport file={stlFile} />
-                <ShufflePanel open={activePanel === "shuffle"} onClose={() => setActivePanel(null)} />
+                <MeshToolsPanel open={activePanel === "mesh"} onClose={() => setActivePanel(null)} />
                 <AssistantPanel open={activePanel === "ai"} onClose={() => setActivePanel(null)} />
             </main>
             {view === "settings" ? <SettingsView onClose={() => setView("editor")} /> : null}
