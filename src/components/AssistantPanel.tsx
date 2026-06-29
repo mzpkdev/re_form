@@ -3,15 +3,7 @@ import { Bot, Send, User, X } from "lucide-react"
 import { type KeyboardEvent, useEffect, useRef, useState } from "react"
 import { cn } from "../design/cn"
 import { useApiKey, useBaseUrl, useModel } from "../hooks/useApiConfig"
-import { runAgentTurn } from "../lib/agent"
-import { applyEdit, EDIT_TOOLS } from "../lib/edits"
-import { initManifold } from "../lib/manifold"
-import { type Transform, transformedBounds, type Vec3 } from "../lib/model"
-import { getManifold, setManifold } from "../lib/modelStore"
-import { type ChatMessage, streamChat, type ToolCall, type ToolDef } from "../lib/openrouter"
-import { checkPrintability } from "../lib/printability"
-import { buildSculpt, SCULPT_TOOL, type SculptScene } from "../lib/sculpt"
-import { formatToolError } from "../lib/validate"
+import { type ChatMessage, streamChat } from "../lib/openrouter"
 import { Markdown } from "./Markdown"
 import { Typewriter } from "./Typewriter"
 
@@ -20,105 +12,18 @@ type Message = {
     role: "assistant" | "user"
     text: string
     timestamp?: string
-    actioning?: boolean
 }
 
 /**
- * The transform tool the assistant uses to position/orient/scale the whole model
- * (separate from the CSG edit vocabulary, which reshapes geometry). Omitted
- * fields leave that component of the current transform unchanged.
+ * A plain conversational assistant: it streams a reply and has no view of, or
+ * control over, the model. No editor context is injected and no tools are sent,
+ * so a single minimal system line is the only framing.
  */
-const SET_TRANSFORM_TOOL: ToolDef = {
-    type: "function",
-    function: {
-        name: "set_transform",
-        description:
-            "Set the model's overall placement: position (mm), rotation (degrees, applied x→y→z), and uniform/per-axis scale. Each field is a [x, y, z] array. Omit a field to leave it unchanged. This moves the whole model — use the CSG tools to change its shape.",
-        parameters: {
-            type: "object",
-            properties: {
-                position: {
-                    type: "array",
-                    items: { type: "number" },
-                    minItems: 3,
-                    maxItems: 3,
-                    description: "Translation [x, y, z] in millimetres."
-                },
-                rotation: {
-                    type: "array",
-                    items: { type: "number" },
-                    minItems: 3,
-                    maxItems: 3,
-                    description: "Rotation [x, y, z] in degrees."
-                },
-                scale: {
-                    type: "array",
-                    items: { type: "number" },
-                    minItems: 3,
-                    maxItems: 3,
-                    description: "Scale factor [x, y, z] (1 = unchanged)."
-                }
-            },
-            additionalProperties: false
-        }
-    }
-}
-
-const tools: ToolDef[] = [...EDIT_TOOLS, SET_TRANSFORM_TOOL, SCULPT_TOOL]
-
-/** A [x, y, z] number triple from the arg bag, or undefined when absent/malformed. */
-const triple = (value: unknown): Vec3 | undefined => {
-    if (!Array.isArray(value) || value.length !== 3) {
-        return undefined
-    }
-    if (!value.every((n) => typeof n === "number" && Number.isFinite(n))) {
-        return undefined
-    }
-    return [value[0], value[1], value[2]]
-}
-
-const fmt = (v: Vec3): string => v.map((n) => n.toFixed(1)).join(", ")
-
-/**
- * Describe the live model for the system prompt so the assistant knows what it
- * is editing. Reports the TRUE post-transform bounding box — the final exported
- * size after the active set_transform placement (scale → rotate → translate) is
- * baked in — plus that placement and the post-scale volume, or that the canvas
- * is empty. Takes the current transform so the read-back matches what export and
- * the viewport actually produce.
- */
-const describeModel = (t: Transform): string => {
-    const m = getManifold()
-    if (!m) {
-        return "No model loaded yet — use create_primitive to start."
-    }
-    const { min, max } = transformedBounds(m, t)
-    const [sx, sy, sz] = t.scale
-    const finalVolume = m.volume() * sx * sy * sz
-    return [
-        `Current model (final exported size, after the active placement): bounding box min [${fmt(min)}] mm, max [${fmt(max)}] mm, volume ${finalVolume.toFixed(1)} mm³.`,
-        `Active placement — position [${fmt(t.position)}] mm, rotation [${fmt(t.rotation)}] deg, scale [${fmt(t.scale)}].`
-    ].join(" ")
-}
-
-const buildSystemMessage = (t: Transform): ChatMessage => ({
-    role: "system",
-    content: [
-        "You are a CAD assistant that edits a single 3D solid. All units are millimetres.",
-        "To change the model, call the provided tools — never describe edits you did not make.",
-        "Use create_primitive to start a new solid; add/cut/intersect_primitive and drill_hole to reshape it; set_transform to place the whole model.",
-        "create/add/cut/intersect_primitive accept these shapes: cube, sphere, cylinder, cone (radius_bottom, radius_top — 0 for a pointed apex — and height), tube (outer_radius, wall, height), and chamfered_box (size_x/y/z plus chamfer, the per-side inset of the tapered top face).",
-        "Use the hollow tool to scoop the current solid into a closed shell of a given wall thickness (inner corners round off).",
-        "For holes/pockets that mate with another part, pass fit: press (≈0.1 mm/side, interference), snug (≈0.2), or slip (≈0.4, free sliding), plus optional printer_offset for calibration; drill_hole sizes the hole up to receive a peg, cut_primitive oversizes the pocket.",
-        "Each edit reports the part's new size and a quick printability check; mention any flagged issues to the user.",
-        "The bounding box and volume below are the FINAL exported size in mm, with the active set_transform placement (scale, rotation, translation) already applied — not the raw pre-transform solid.",
-        describeModel(t)
-    ].join(" ")
-})
+const SYSTEM_MESSAGE: ChatMessage = { role: "system", content: "You are a helpful assistant." }
 
 const formatTime = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 
-const AssistantMessage = ({ text, timestamp, actioning, complete }: Message & { complete: boolean }) => {
+const AssistantMessage = ({ text, timestamp, complete }: Message & { complete: boolean }) => {
     // Type the raw source while streaming; once the message has both finished
     // streaming (`complete`) and finished typing (`onDone`), swap to rendered
     // Markdown. We never render Markdown mid-stream — only after settle.
@@ -129,12 +34,7 @@ const AssistantMessage = ({ text, timestamp, actioning, complete }: Message & { 
                 <Bot className="size-4 text-primary" />
             </div>
             <div className="min-w-0">
-                <div
-                    className={cn(
-                        "border border-on-surface/10 bg-surface-container-low p-3 text-mono-data leading-relaxed break-words text-on-surface chamfer-tr",
-                        actioning && "border-l-2 border-l-primary"
-                    )}
-                >
+                <div className="border border-on-surface/10 bg-surface-container-low p-3 text-mono-data leading-relaxed break-words text-on-surface chamfer-tr">
                     {complete && revealed ? (
                         <Markdown>{text}</Markdown>
                     ) : (
@@ -176,17 +76,7 @@ const TypingIndicator = () => (
     </div>
 )
 
-export const AssistantPanel = ({
-    open,
-    onClose,
-    transform,
-    onTransformChange
-}: {
-    open: boolean
-    onClose: () => void
-    transform: Transform
-    onTransformChange: (t: Transform) => void
-}) => {
+export const AssistantPanel = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
     const { apiKey } = useApiKey()
     const { baseUrl } = useBaseUrl()
     const { model } = useModel()
@@ -197,91 +87,28 @@ export const AssistantPanel = ({
     const replyIdRef = useRef(0)
     const controllerRef = useRef<AbortController | undefined>(undefined)
     const historyRef = useRef<HTMLDivElement>(null)
-    // Mirror the latest transform so the execute closure (created once per
-    // mutation) merges set_transform deltas over the current value, not a stale one.
-    const transformRef = useRef(transform)
-    transformRef.current = transform
 
     const chat = useMutation({
         onMutate: () => setThinking(false),
         mutationFn: async (history: ChatMessage[]) => {
             const { signal } = controllerRef.current ?? new AbortController()
+            const replyId = replyIdRef.current
 
-            // Append a streamed delta to the assistant bubble that is currently open.
-            const onText = (delta: string) => {
-                const replyId = replyIdRef.current
-                setMessages((prev) => prev.map((m) => (m.id === replyId ? { ...m, text: m.text + delta } : m)))
-            }
-
-            // A tool turn is starting: flag the open bubble as actioning, then open a
-            // fresh bubble so the next turn's prose streams into its own message.
-            const onAction = () => {
-                const closingId = replyIdRef.current
-                const freshId = nextId.current++
-                replyIdRef.current = freshId
-                setMessages((prev) => [
-                    ...prev.map((m) => (m.id === closingId ? { ...m, actioning: true } : m)),
-                    { id: freshId, role: "assistant", text: "", timestamp: `SYS_LOG - ${formatTime()}` }
-                ])
-            }
-
-            const execute = async (call: ToolCall): Promise<string> => {
-                let args: unknown
-                try {
-                    args = JSON.parse(call.function.arguments)
-                } catch {
-                    return "Error: arguments were not valid JSON"
-                }
-                const name = call.function.name
-                if (name === "set_transform") {
-                    const a = args as Record<string, unknown>
-                    const current = transformRef.current
-                    const merged: Transform = {
-                        position: triple(a.position) ?? current.position,
-                        rotation: triple(a.rotation) ?? current.rotation,
-                        scale: triple(a.scale) ?? current.scale
-                    }
-                    onTransformChange(merged)
-                    return "Transform updated."
-                }
-                const wasm = await initManifold()
-                if (name === "sculpt") {
-                    try {
-                        const scene = args as SculptScene
-                        const next = buildSculpt(wasm, scene)
-                        setManifold(next)
-                        return `Sculpted a shape with ${scene.parts.length} parts; volume ${next.volume().toFixed(1)} mm³.`
-                    } catch (error) {
-                        return formatToolError(error)
-                    }
-                }
-                try {
-                    const next = applyEdit(wasm, getManifold(), name, args)
-                    setManifold(next)
-                    const box = next.boundingBox()
-                    const dims = `${(box.max[0] - box.min[0]).toFixed(1)}×${(box.max[1] - box.min[1]).toFixed(1)}×${(box.max[2] - box.min[2]).toFixed(1)} mm`
-                    const report = checkPrintability(wasm, next)
-                    const printLine = report.issues.length
-                        ? ` Printability: ${report.issues.map((i) => `${i.level === "error" ? "✗" : "⚠"} ${i.code} (${i.message})`).join("; ")}`
-                        : " Printability: OK."
-                    return `Applied ${name}. Size ${dims}, volume ${next.volume().toFixed(1)} mm³.${printLine}`
-                } catch (error) {
-                    return formatToolError(error)
+            for await (const chunk of streamChat({
+                apiKey,
+                baseUrl,
+                model,
+                messages: history,
+                signal,
+                onOpen: () => setThinking(true)
+            })) {
+                // No tools are sent, so only text deltas arrive; append them to the open bubble.
+                if (chunk.type === "text") {
+                    setMessages((prev) =>
+                        prev.map((m) => (m.id === replyId ? { ...m, text: m.text + chunk.value } : m))
+                    )
                 }
             }
-
-            const stream = (msgs: ChatMessage[]) =>
-                streamChat({
-                    apiKey,
-                    baseUrl,
-                    model,
-                    messages: msgs,
-                    tools,
-                    signal,
-                    onOpen: () => setThinking(true)
-                })
-
-            await runAgentTurn(history, { stream, execute, onText, onAction })
         },
         onError: (error) => {
             if (error.name === "AbortError") {
@@ -323,7 +150,7 @@ export const AssistantPanel = ({
         const userId = nextId.current++
         const replyId = nextId.current++
         const history: ChatMessage[] = [
-            buildSystemMessage(transformRef.current),
+            SYSTEM_MESSAGE,
             ...messages.map((m) => ({ role: m.role, content: m.text })),
             { role: "user", content: userText }
         ]
@@ -384,11 +211,9 @@ export const AssistantPanel = ({
                             return <UserMessage key={message.id} {...message} />
                         }
                         // Until the first delta lands the reply is empty — the TypingIndicator
-                        // stands in for it, so don't also render an empty assistant bubble.
-                        // `complete`: while the turn is pending only the still-streaming final
-                        // bubble is incomplete (intermediate ones are already `actioning`);
-                        // once it settles `isPending` is false so all are complete.
-                        const complete = !chat.isPending || !!message.actioning
+                        // stands in for it, so don't also render an empty assistant bubble. Only
+                        // the reply currently streaming is incomplete; all others are settled.
+                        const complete = !chat.isPending || message.id !== replyIdRef.current
                         return message.text ? (
                             <AssistantMessage key={message.id} {...message} complete={complete} />
                         ) : null

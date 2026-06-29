@@ -1,21 +1,12 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
-import { cn } from "../design/cn"
 import { initManifold } from "../lib/manifold"
-import { geometryToManifold, type Transform, transformedGeometry } from "../lib/model"
+import { geometryToManifold, meshToBufferGeometry } from "../lib/model"
 import { getManifold, setManifold, useModelVersion } from "../lib/modelStore"
 import { parseStl } from "../lib/stl"
 
-export const Viewport = ({
-    file,
-    transform,
-    hidden
-}: {
-    file: File | null
-    transform: Transform
-    hidden?: boolean
-}) => {
+export const Viewport = ({ file }: { file: File | null }) => {
     const sectionRef = useRef<HTMLElement>(null)
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
     const sceneRef = useRef<THREE.Scene | null>(null)
@@ -23,8 +14,8 @@ export const Viewport = ({
     const controlsRef = useRef<OrbitControls | null>(null)
     // The displayed mesh and the material it is built with. The live source
     // Manifold now lives in the module store (modelStore) — the STL importer and
-    // the AI executor both feed setManifold, so the Viewport no longer owns the
-    // handle. The re-bake effect derives geometry from getManifold().
+    // Shuffle both feed setManifold, so the Viewport no longer owns the handle.
+    // The re-bake effect derives geometry from getManifold().
     const meshRef = useRef<THREE.Mesh | null>(null)
     const materialRef = useRef<THREE.MeshStandardMaterial | null>(null)
     const [nonManifold, setNonManifold] = useState(false)
@@ -191,14 +182,13 @@ export const Viewport = ({
         }
     }, [file])
 
-    // Re-bake the displayed geometry whenever the model version (a setManifold
-    // anywhere) or the transform changes. Reads the live Manifold from the store
-    // and bakes the transform into a fresh BufferGeometry. If a mesh already
-    // exists we swap its geometry and dispose the previous one. If none exists we
-    // create the mesh, add it and frame the camera. Framing happens EXACTLY when
-    // the mesh is first created (file load, or the first AI primitive from an
-    // empty scene); transform tweaks and edits that swap an existing mesh's
-    // geometry must not reframe.
+    // Re-bake the displayed geometry whenever the model version bumps (a
+    // setManifold anywhere). Reads the live Manifold from the store and converts
+    // its mesh to a fresh BufferGeometry. If a mesh already exists we swap its
+    // geometry and dispose the previous one. If none exists we create the mesh,
+    // add it and frame the camera. Framing happens EXACTLY when the mesh is first
+    // created (file load); later edits that swap an existing mesh's geometry must
+    // not reframe.
     // biome-ignore lint/correctness/useExhaustiveDependencies: modelVersion gates the re-bake; getManifold() reads the latest handle.
     useEffect(() => {
         const m = getManifold()
@@ -210,7 +200,7 @@ export const Viewport = ({
             return
         }
 
-        const next = transformedGeometry(m, transform)
+        const next = meshToBufferGeometry(m.getMesh())
         const mesh = meshRef.current
         if (mesh) {
             const previous = mesh.geometry
@@ -237,13 +227,13 @@ export const Viewport = ({
             controls.target.copy(center)
             controls.update()
         }
-    }, [modelVersion, transform])
+    }, [modelVersion])
 
     return (
-        <section ref={sectionRef} className={cn("relative flex-1 overflow-hidden bg-3d-grid", hidden && "hidden")}>
+        <section ref={sectionRef} className="relative flex-1 overflow-hidden bg-3d-grid">
             {nonManifold ? (
                 <div className="absolute inset-x-0 bottom-0 bg-surface-container px-4 py-2 text-center font-mono text-tiny text-on-surface-variant">
-                    Mesh is not manifold — transforms are disabled.
+                    Mesh is not manifold — showing raw geometry.
                 </div>
             ) : null}
         </section>

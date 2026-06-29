@@ -1,28 +1,14 @@
-import type { Box, Manifold, ManifoldToplevel, Mesh } from "manifold-3d"
+import type { Manifold, ManifoldToplevel, Mesh } from "manifold-3d"
 import * as THREE from "three"
 import { mergeVertices } from "three/examples/jsm/utils/BufferGeometryUtils.js"
 import { assertValidSolid } from "./validate"
-
-export type Vec3 = [number, number, number]
-
-export type Transform = {
-    position: Vec3
-    rotation: Vec3
-    scale: Vec3
-}
-
-export const IDENTITY_TRANSFORM: Transform = {
-    position: [0, 0, 0],
-    rotation: [0, 0, 0],
-    scale: [1, 1, 1]
-}
 
 /**
  * Convert a manifold Mesh into a three.js BufferGeometry. Copies the
  * interleaved vertex properties down to a tight xyz position buffer (the mesh
  * may carry more than 3 props per vertex), indexes the triangles, and derives
- * vertex normals. This is the single conversion shared by Widget and the
- * transform pipeline.
+ * vertex normals. This is the single conversion shared by the Viewport re-bake
+ * and the STL export path.
  */
 export const meshToBufferGeometry = (mesh: Mesh): THREE.BufferGeometry => {
     const geometry = new THREE.BufferGeometry()
@@ -86,50 +72,4 @@ export const geometryToManifold = (wasm: ManifoldToplevel, geometry: THREE.Buffe
     }
     assertValidSolid(manifold, "mesh is not manifold")
     return manifold
-}
-
-/**
- * Apply a TRS transform to `source`, returning a NEW Manifold. Order is
- * scale → rotate → translate, matching how a TRS matrix composes (rotation in
- * degrees, applied x→y→z — manifold's convention). The intermediate scaled and
- * rotated handles are deleted; `source` belongs to the caller and is left
- * intact. Shared by {@link transformedGeometry} and {@link transformedBounds}
- * so the two can never drift.
- */
-const applyTransform = (source: Manifold, t: Transform): Manifold => {
-    const scaled = source.scale(t.scale)
-    const rotated = scaled.rotate(t.rotation)
-    const translated = rotated.translate(t.position)
-    scaled.delete()
-    rotated.delete()
-    return translated
-}
-
-/**
- * Apply a TRS transform to a source Manifold and bake it into a fresh
- * BufferGeometry. Order is scale → rotate → translate, matching how a TRS
- * matrix composes. Rotation is in degrees (manifold's convention, applied
- * x→y→z). Every intermediate Manifold is deleted; `source` belongs to the
- * caller and is left intact.
- */
-export const transformedGeometry = (source: Manifold, t: Transform): THREE.BufferGeometry => {
-    const transformed = applyTransform(source, t)
-    const mesh = transformed.getMesh()
-    const geometry = meshToBufferGeometry(mesh)
-    transformed.delete()
-    return geometry
-}
-
-/**
- * Axis-aligned bounding box of `source` after the same scale → rotate →
- * translate transform {@link transformedGeometry} bakes in — i.e. the box of
- * the FINAL exported part, in millimetres. Reads the transformed manifold's
- * bounding box directly (no meshing) and deletes every intermediate; `source`
- * belongs to the caller and is left intact.
- */
-export const transformedBounds = (source: Manifold, t: Transform): { min: Vec3; max: Vec3 } => {
-    const transformed = applyTransform(source, t)
-    const box: Box = transformed.boundingBox()
-    transformed.delete()
-    return { min: box.min, max: box.max }
 }

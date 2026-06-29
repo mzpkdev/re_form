@@ -1,15 +1,13 @@
 import { useState } from "react"
 import * as THREE from "three"
 import { AssistantPanel } from "./components/AssistantPanel"
-import { DrawingWorkspace } from "./components/DrawingWorkspace"
 import { SettingsView } from "./components/SettingsView"
 import { ShufflePanel } from "./components/ShufflePanel"
 import { Sidebar } from "./components/Sidebar"
-import { ToolsPanel } from "./components/ToolsPanel"
 import { TopBar } from "./components/TopBar"
 import { Viewport } from "./components/Viewport"
 import { cn } from "./design/cn"
-import { IDENTITY_TRANSFORM, type Transform, transformedGeometry } from "./lib/model"
+import { meshToBufferGeometry } from "./lib/model"
 import { getManifold } from "./lib/modelStore"
 import { exportStl, verifyStlDimensions } from "./lib/stl"
 
@@ -20,9 +18,8 @@ const DEFAULT_PART_NAME = "model"
 
 export const App = () => {
     const [view, setView] = useState<"editor" | "settings">("editor")
-    const [activePanel, setActivePanel] = useState<"ai" | "tools" | "shuffle" | "draw" | null>(null)
+    const [activePanel, setActivePanel] = useState<"ai" | "shuffle" | null>(null)
     const [stlFile, setStlFile] = useState<File | null>(null)
-    const [transform, setTransform] = useState<Transform>(IDENTITY_TRANSFORM)
 
     const handleExport = () => {
         const m = getManifold()
@@ -30,7 +27,7 @@ export const App = () => {
             return
         }
         const name = DEFAULT_PART_NAME
-        const geometry = transformedGeometry(m, transform)
+        const geometry = meshToBufferGeometry(m.getMesh())
 
         // Capture the intended size (mm) from the geometry before export so we
         // can confirm the written bytes encode the same dimensions.
@@ -59,24 +56,9 @@ export const App = () => {
             <TopBar view={view} onNavigate={setView} onImport={setStlFile} onExport={handleExport} />
             <main className={cn("min-h-0 flex-1", view === "editor" ? "flex" : "hidden")}>
                 <Sidebar activePanel={activePanel} onSelect={setActivePanel} onExport={handleExport} />
-                {/* The 3D viewport stays mounted (WebGL preserved) and hides while the
-                    drawing canvas takes the center; the canvas + its right-side tools
-                    are the DrawingWorkspace, shown when the "Drawing" panel is active. */}
-                <Viewport file={stlFile} transform={transform} hidden={activePanel === "draw"} />
-                <DrawingWorkspace active={activePanel === "draw"} onClose={() => setActivePanel(null)} />
-                <ToolsPanel
-                    open={activePanel === "tools"}
-                    onClose={() => setActivePanel(null)}
-                    transform={transform}
-                    onChange={setTransform}
-                />
+                <Viewport file={stlFile} />
                 <ShufflePanel open={activePanel === "shuffle"} onClose={() => setActivePanel(null)} />
-                <AssistantPanel
-                    open={activePanel === "ai"}
-                    onClose={() => setActivePanel(null)}
-                    transform={transform}
-                    onTransformChange={setTransform}
-                />
+                <AssistantPanel open={activePanel === "ai"} onClose={() => setActivePanel(null)} />
             </main>
             {view === "settings" ? <SettingsView onClose={() => setView("editor")} /> : null}
         </div>
