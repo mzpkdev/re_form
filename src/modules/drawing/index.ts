@@ -29,6 +29,7 @@ export {
     removeEntities,
     removeEntity,
     setGridSize,
+    subscribe,
     undo,
     updateEntity,
     useDrawing,
@@ -55,10 +56,14 @@ export {
 } from "./editorStore"
 // Extrude bridge: pure 2D-profile → 3D-solid (manifold) construction.
 export { inferPlane, profileToManifold } from "./extrude"
+// File I/O UI: export/import the 2D drawing document as JSON.
+export { FileControl } from "./FileControl"
 export { GridControl } from "./GridControl"
 // Pure pointer-vs-entity hit testing (the testable core of click selection).
 export { hitTest } from "./hitTest"
 export { PlaneSwitcher } from "./PlaneSwitcher"
+// Persistence: localStorage autosave + hydrate-once for the drawing document.
+export { initPersistence, loadStoredDrawing, STORAGE_KEY, saveDrawing } from "./persistence"
 export { flattenEntity, planeNormal, projectPoint, tessellateEntity, unprojectPoint } from "./project"
 export { deserialize, serialize } from "./serialize"
 export { constrainToAngle, snapToGrid } from "./snap"
@@ -66,3 +71,6 @@ export { Toolbar } from "./Toolbar"
 export type { Arc, Circle, Drawing, Entity, Line, Plane, Polyline, Vec2, Vec3 } from "./types"
 export { newId } from "./types"
 export { useDrawTool } from "./useDrawTool"
+// Keymap: Cmd/Ctrl+Z undo, Cmd/Ctrl+Shift+Z (and Ctrl+Y) redo — guarded so text
+// inputs keep native editing.
+export { useUndoRedoKeymap } from "./useUndoRedoKeymap"

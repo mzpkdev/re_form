@@ -28,7 +28,12 @@ let future: Drawing[] = []
 const HISTORY_CAP = 100
 const listeners = new Set<() => void>()
 
-const subscribe = (onChange: () => void) => {
+/**
+ * Subscribe to document/history changes; returns an unsubscribe. Powers both the
+ * `useSyncExternalStore` hooks below and the module-level autosave in
+ * `persistence`. Fires on every mutation, undo/redo, and load.
+ */
+export const subscribe = (onChange: () => void): (() => void) => {
     listeners.add(onChange)
     return () => {
         listeners.delete(onChange)
