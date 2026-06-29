@@ -1,4 +1,4 @@
-import { Bot, Shuffle, SlidersHorizontal } from "lucide-react"
+import { Bot, SlidersHorizontal, VenetianMask } from "lucide-react"
 import { cn } from "../design/cn"
 
 type Panel = "ai" | "mesh" | "obfuscate"
@@ -45,19 +45,19 @@ export const Sidebar = ({
             <h2 className="font-mono text-xl font-semibold text-on-primary">PROJECT_NAME</h2>
         </div>
         <nav className="flex flex-1 flex-col gap-2 py-4">
-            <NavItem
-                icon={Shuffle}
-                label="Obfuscate"
-                active={activePanel === "obfuscate"}
-                onClick={() => onSelect("obfuscate")}
-            />
+            <NavItem icon={Bot} label="AI Assistant" active={activePanel === "ai"} onClick={() => onSelect("ai")} />
             <NavItem
                 icon={SlidersHorizontal}
                 label="Mesh Tools"
                 active={activePanel === "mesh"}
                 onClick={() => onSelect("mesh")}
             />
-            <NavItem icon={Bot} label="AI Assistant" active={activePanel === "ai"} onClick={() => onSelect("ai")} />
+            <NavItem
+                icon={VenetianMask}
+                label="Obfuscate"
+                active={activePanel === "obfuscate"}
+                onClick={() => onSelect("obfuscate")}
+            />
         </nav>
         <div className="border-t border-on-surface/10 p-6">
             <button

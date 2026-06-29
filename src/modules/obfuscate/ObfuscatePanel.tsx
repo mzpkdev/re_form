@@ -1,10 +1,12 @@
-import { Shuffle, X } from "lucide-react"
-import { useState } from "react"
+import { VenetianMask, X } from "lucide-react"
+import { useMemo, useState } from "react"
 import { createPortal } from "react-dom"
 import { cn } from "../../design/cn"
 import { initManifold } from "../../lib/manifold"
 import { geometryToManifold, meshToBufferGeometry } from "../../lib/model"
 import { getManifold, setManifold, useModelVersion } from "../../lib/modelStore"
+import { FingerprintView } from "./FingerprintView"
+import { meshDigest } from "./fingerprint"
 import { obfuscateGeometry } from "./obfuscate"
 
 type Stats = { before: number; after: number }
@@ -51,15 +53,21 @@ export const ObfuscatePanel = ({ open, onClose }: { open: boolean; onClose: () =
     useModelVersion()
     const model = getManifold()
     const hasModel = model !== null
+    // Digest of the live mesh, recomputed only when the handle changes — setManifold
+    // always swaps in a new Manifold, so `model` identity tracks every edit. Drives
+    // the visual fingerprint so the change is visible after each obfuscate.
+    const digest = useMemo(() => (model ? meshDigest(model.getMesh()) : null), [model])
     // numTri() is O(1) (no mesh bake), so it's safe to read every render. Subdivide
     // quadruples triangles per pass; project the result and gate Confirm on the budget.
     const projectedTriangles = (model?.numTri() ?? 0) * 4 ** subdivide
     const overBudget = projectedTriangles > MAX_TRIANGLES
 
     // Obfuscate the loaded model and replace it in the store — the Viewport re-bakes
-    // from the new handle, so the preview updates in place. Reorder is omitted: the
-    // export re-serializes through manifold's canonical order, so only subdivide and
-    // jitter (real geometry changes) survive to the saved file.
+    // from the new handle, so the preview updates in place. Reorder is on: manifold
+    // canonicalizes the vertex buffer but NOT triangle order/winding, so a reorder
+    // survives re-serialization and changes the exported bytes with zero geometry
+    // change. It defeats only naive byte/triangle-order hashing, though — a vertex-set
+    // or geometric fingerprint needs subdivide/jitter (real mesh changes).
     const onConfirm = async () => {
         const source = getManifold()
         if (!source) {
@@ -90,7 +98,7 @@ export const ObfuscatePanel = ({ open, onClose }: { open: boolean; onClose: () =
             const soup = indexed.toNonIndexed()
             indexed.dispose()
             const seed = Math.floor(Math.random() * 0x7fffffff)
-            const obfuscated = obfuscateGeometry(soup, { reorder: false, subdivide, jitter, seed })
+            const obfuscated = obfuscateGeometry(soup, { reorder: true, subdivide, jitter, seed })
             soup.dispose()
             const after = obfuscated.getAttribute("position").count / 3
             try {
@@ -127,7 +135,7 @@ export const ObfuscatePanel = ({ open, onClose }: { open: boolean; onClose: () =
             >
                 <div className="flex items-center justify-between border-b border-on-surface/10 bg-surface-container-low p-4">
                     <div className="flex items-center gap-2">
-                        <Shuffle className="size-5 text-primary" />
+                        <VenetianMask className="size-5 text-primary" />
                         <h3 className="font-mono text-title-md text-on-surface">OBFUSCATE</h3>
                     </div>
                     <button type="button" onClick={onClose} className="text-tertiary hover:text-on-surface">
@@ -142,6 +150,18 @@ export const ObfuscatePanel = ({ open, onClose }: { open: boolean; onClose: () =
                                 Obfuscate the loaded model into a look-alike with different geometry and replace it in
                                 the viewport. Use Export to save the result.
                             </p>
+
+                            {digest ? (
+                                <div className="flex flex-col gap-3">
+                                    <div className="font-mono text-label-caps uppercase tracking-widest text-tertiary">
+                                        Fingerprint
+                                    </div>
+                                    <FingerprintView digest={digest} />
+                                    <p className="font-mono text-tiny text-tertiary">
+                                        A signature of the exported mesh — it flips whenever the file changes.
+                                    </p>
+                                </div>
+                            ) : null}
 
                             <div className="flex flex-col gap-4">
                                 <div className="font-mono text-label-caps uppercase tracking-widest text-tertiary">
