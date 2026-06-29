@@ -1,11 +1,11 @@
 import { useMutation } from "@tanstack/react-query"
 import { Bot, Send, User, X } from "lucide-react"
 import { type KeyboardEvent, useEffect, useRef, useState } from "react"
-import { cn } from "../design/cn"
-import { useApiKey, useBaseUrl, useModel } from "../hooks/useApiConfig"
-import { type ChatMessage, streamChat } from "../lib/openrouter"
+import { cn } from "../../design/cn"
 import { Markdown } from "./Markdown"
+import { type ChatMessage, streamChat } from "./openrouter"
 import { Typewriter } from "./Typewriter"
+import { useApiKey, useBaseUrl, useModel } from "./useApiConfig"
 
 type Message = {
     id: number

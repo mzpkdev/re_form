@@ -1,5 +1,5 @@
 import * as THREE from "three"
-import { parseStl } from "./stl"
+import { parseStl } from "../../lib/stl"
 
 /**
  * Options for {@link shuffleGeometry}. Every op is opt-in (or has a no-op

@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react"
 import * as THREE from "three"
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js"
-import { initManifold } from "../lib/manifold"
-import { geometryToManifold, meshToBufferGeometry } from "../lib/model"
-import { getManifold, setManifold, useModelVersion } from "../lib/modelStore"
-import { parseStl } from "../lib/stl"
+import { initManifold } from "../../lib/manifold"
+import { geometryToManifold, meshToBufferGeometry } from "../../lib/model"
+import { getManifold, setManifold, useModelVersion } from "../../lib/modelStore"
+import { parseStl } from "../../lib/stl"
 
 export const Viewport = ({ file }: { file: File | null }) => {
     const sectionRef = useRef<HTMLElement>(null)

@@ -1,11 +1,11 @@
 import { Shuffle, X } from "lucide-react"
 import { useState } from "react"
 import { createPortal } from "react-dom"
-import { cn } from "../design/cn"
-import { initManifold } from "../lib/manifold"
-import { geometryToManifold, meshToBufferGeometry } from "../lib/model"
-import { getManifold, setManifold, useModelVersion } from "../lib/modelStore"
-import { shuffleGeometry } from "../lib/shuffle"
+import { cn } from "../../design/cn"
+import { initManifold } from "../../lib/manifold"
+import { geometryToManifold, meshToBufferGeometry } from "../../lib/model"
+import { getManifold, setManifold, useModelVersion } from "../../lib/modelStore"
+import { shuffleGeometry } from "./shuffle"
 
 type Stats = { before: number; after: number }
 

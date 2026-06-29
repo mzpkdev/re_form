@@ -1,9 +1,9 @@
 import { describe, expect, it } from "bun:test"
 import * as THREE from "three"
-import { initManifold } from "./manifold"
-import { geometryToManifold } from "./model"
+import { initManifold } from "../../lib/manifold"
+import { geometryToManifold } from "../../lib/model"
+import { parseStl } from "../../lib/stl"
 import { geometryToBinaryStl, shuffleGeometry, shuffleStl } from "./shuffle"
-import { parseStl } from "./stl"
 
 const context = describe
 

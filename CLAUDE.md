@@ -10,10 +10,16 @@ React 19 + Vite app that builds a 3D widget via manifold-3d (CSG over WASM) and 
 - `bun test` — test runner (`*.spec.ts`)
 - `bun run lint:fix` — Biome lint + format; it owns all formatting, so don't hand-format
 
+## Structure
+
+- **Feature modules live in `src/modules/<feature>`** — one folder per chunk of functionality (`assistant`, `shuffle`, `viewer`), each a vertical slice owning its UI *and* its feature-specific logic (e.g. `assistant` owns `openrouter` + `useApiConfig`). Each module has an `index.ts` barrel as its public entry point — scan those to see what a module exposes. Cross-module and shell code import from the barrel (`modules/assistant`), never deep paths.
+- **`src/lib`** — *shared* React-free domain logic used across modules (the manifold pipeline: `manifold`, `model`, `modelStore`, `stl`, `validate`, `geometry`). If logic is used by only one module, it belongs in that module, not here.
+- **`src/components`** — app-shell chrome shared across views (`TopBar`, `Sidebar`); `src/design` — headless UI kit (`cn`, Ark UI wrappers). `App.tsx`/`main.tsx` wire the shell to the modules.
+
 ## Conventions
 
 - **Components**: arrow functions, named exports only (no `default`). Type props inline. Data hooks are `useX` wrapping `useQuery`.
-- **Domain logic lives in `src/lib`** — React-free; three.js types are the interop boundary (`toBufferGeometry`). Classes use a `private constructor` + static factory (see `Widget.build`).
+- **Domain logic is React-free** — three.js types are the interop boundary (`toBufferGeometry`). Classes use a `private constructor` + static factory (see `Widget.build`).
 - **Imports**: `import type` for type-only imports (`verbatimModuleSyntax` is on — mixed imports won't compile). `import * as THREE from "three"`.
 - **Free what you allocate** — the easy bug in this codebase:
   - manifold: `.delete()` every intermediate `Manifold`/`CrossSection`; `Widget.build` deletes all handles before returning.

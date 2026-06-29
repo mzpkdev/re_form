@@ -1,9 +1,9 @@
 import { useMutation } from "@tanstack/react-query"
 import { Bot, ChevronLeft, Eye, EyeOff } from "lucide-react"
 import { useState } from "react"
-import { cn } from "../design/cn"
-import { useApiKey, useBaseUrl, useModel } from "../hooks/useApiConfig"
-import { DEFAULT_BASE_URL, DEFAULT_MODEL, verifyKey } from "../lib/openrouter"
+import { cn } from "../../design/cn"
+import { DEFAULT_BASE_URL, DEFAULT_MODEL, verifyKey } from "./openrouter"
+import { useApiKey, useBaseUrl, useModel } from "./useApiConfig"
 
 const SECTIONS = [{ icon: Bot, label: "AI Assistant", active: true }]
 

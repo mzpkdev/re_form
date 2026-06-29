@@ -1,15 +1,13 @@
 import { useState } from "react"
 import * as THREE from "three"
-import { AssistantPanel } from "./components/AssistantPanel"
-import { SettingsView } from "./components/SettingsView"
-import { ShufflePanel } from "./components/ShufflePanel"
-import { Sidebar } from "./components/Sidebar"
-import { TopBar } from "./components/TopBar"
-import { Viewport } from "./components/Viewport"
+import { Sidebar, TopBar } from "./components"
 import { cn } from "./design/cn"
 import { meshToBufferGeometry } from "./lib/model"
 import { getManifold } from "./lib/modelStore"
 import { exportStl, verifyStlDimensions } from "./lib/stl"
+import { AssistantPanel, SettingsView } from "./modules/assistant"
+import { ShufflePanel } from "./modules/shuffle"
+import { Viewport } from "./modules/viewer"
 
 // No naming UI yet; the export plumbing is structured so a part name could be
 // threaded in later (it would drive both the filename and, once 3MF lands, the
