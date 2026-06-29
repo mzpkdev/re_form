@@ -3,7 +3,7 @@ import * as THREE from "three"
 import { initManifold } from "../../lib/manifold"
 import { geometryToManifold } from "../../lib/model"
 import { parseStl } from "../../lib/stl"
-import { geometryToBinaryStl, remixGeometry, remixStl } from "./remix"
+import { geometryToBinaryStl, obfuscateGeometry, obfuscateStl } from "./obfuscate"
 
 const context = describe
 
@@ -82,27 +82,27 @@ const weldedVertexCount = (geometry: THREE.BufferGeometry): number => {
     return keys.size
 }
 
-describe("remix", () => {
-    context("remixGeometry reorder", () => {
+describe("obfuscate", () => {
+    context("obfuscateGeometry reorder", () => {
         it("preserves the triangle multiset while changing position order", () => {
             const original = fixture()
-            const remixed = remixGeometry(original, { reorder: true, seed: SEED })
+            const obfuscated = obfuscateGeometry(original, { reorder: true, seed: SEED })
 
-            expect(sortedTriangles(remixed)).toEqual(sortedTriangles(original))
+            expect(sortedTriangles(obfuscated)).toEqual(sortedTriangles(original))
 
             const before = Array.from(positionArray(original))
-            const after = Array.from(positionArray(remixed))
+            const after = Array.from(positionArray(obfuscated))
             expect(after).not.toEqual(before)
         })
     })
 
-    context("remixGeometry subdivide", () => {
+    context("obfuscateGeometry subdivide", () => {
         it("quadruples triangle count per pass and keeps the bounding box", () => {
             const original = fixture()
             const base = triangleCount(original)
 
-            const once = remixGeometry(original, { reorder: false, subdivide: 1, seed: SEED })
-            const twice = remixGeometry(original, { reorder: false, subdivide: 2, seed: SEED })
+            const once = obfuscateGeometry(original, { reorder: false, subdivide: 1, seed: SEED })
+            const twice = obfuscateGeometry(original, { reorder: false, subdivide: 2, seed: SEED })
 
             expect(triangleCount(once)).toBe(base * 4)
             expect(triangleCount(twice)).toBe(base * 16)
@@ -115,11 +115,11 @@ describe("remix", () => {
         })
     })
 
-    context("remixGeometry jitter", () => {
+    context("obfuscateGeometry jitter", () => {
         it("moves vertices by at most the amplitude and stays watertight", () => {
             const amplitude = 0.05
             const original = fixture()
-            const jittered = remixGeometry(original, { reorder: false, jitter: amplitude, seed: SEED })
+            const jittered = obfuscateGeometry(original, { reorder: false, jitter: amplitude, seed: SEED })
 
             const boxOriginal = boundingBox(original)
             const boxJittered = boundingBox(jittered)
@@ -133,12 +133,12 @@ describe("remix", () => {
         })
     })
 
-    context("remixStl", () => {
+    context("obfuscateStl", () => {
         it("round-trips back to the expected triangle count", () => {
             const input = new TextEncoder().encode(TETRA_STL).buffer
             const expected = triangleCount(fixture()) * 4
 
-            const output = remixStl(input, { reorder: true, subdivide: 1, seed: SEED })
+            const output = obfuscateStl(input, { reorder: true, subdivide: 1, seed: SEED })
             const reparsed = parseStl(output)
 
             expect(triangleCount(reparsed)).toBe(expected)
@@ -146,30 +146,30 @@ describe("remix", () => {
 
         it("produces bytes different from a straight re-serialize", () => {
             const input = new TextEncoder().encode(TETRA_STL).buffer
-            const remixed = new Uint8Array(remixStl(input, { reorder: true, seed: SEED }))
+            const obfuscated = new Uint8Array(obfuscateStl(input, { reorder: true, seed: SEED }))
             const plain = new Uint8Array(geometryToBinaryStl(parseStl(input)))
 
-            expect(remixed).not.toEqual(plain)
+            expect(obfuscated).not.toEqual(plain)
         })
     })
 
     context("geometryToManifold round-trip", () => {
-        it("converts a remixed solid back into a valid manifold", async () => {
+        it("converts a obfuscated solid back into a valid manifold", async () => {
             const wasm = await initManifold()
             // A consistently-wound closed solid, like the app's live manifold; the
             // tetra fixture above is a soup used only for geometry-shape checks.
             const soup = new THREE.BoxGeometry(2, 2, 2).toNonIndexed()
-            const remixed = remixGeometry(soup, { reorder: false, subdivide: 1, jitter: 0.01, seed: SEED })
+            const obfuscated = obfuscateGeometry(soup, { reorder: false, subdivide: 1, jitter: 0.01, seed: SEED })
             soup.dispose()
 
-            const manifold = geometryToManifold(wasm, remixed)
+            const manifold = geometryToManifold(wasm, obfuscated)
 
             expect(manifold.isEmpty()).toBe(false)
-            // Volume ≈ the original 8 mm³ — jitter is sub-tolerance, so the remix is a look-alike.
+            // Volume ≈ the original 8 mm³ — jitter is sub-tolerance, so the obfuscation is a look-alike.
             expect(manifold.volume()).toBeCloseTo(8, 0)
 
             manifold.delete()
-            remixed.dispose()
+            obfuscated.dispose()
         })
     })
 })

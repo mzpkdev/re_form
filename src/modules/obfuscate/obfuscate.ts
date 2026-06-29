@@ -2,11 +2,11 @@ import * as THREE from "three"
 import { parseStl } from "../../lib/stl"
 
 /**
- * Options for {@link remixGeometry}. Every op is opt-in (or has a no-op
- * default) so callers dial in exactly how much the mesh is remixed. A fixed
- * {@link RemixOptions.seed} makes the whole pipeline deterministic.
+ * Options for {@link obfuscateGeometry}. Every op is opt-in (or has a no-op
+ * default) so callers dial in exactly how much the mesh is obfuscated. A fixed
+ * {@link ObfuscateOptions.seed} makes the whole pipeline deterministic.
  */
-export type RemixOptions = {
+export type ObfuscateOptions = {
     /** Shuffle triangle order + rotate winding (default true). */
     reorder?: boolean
     /** Number of 1→4 midpoint-split passes (default 0). */
@@ -25,7 +25,7 @@ type Triangle = [Vertex, Vertex, Vertex]
 
 /**
  * mulberry32 — a tiny, fast, seedable PRNG. Returns a function yielding floats
- * in [0, 1). Used everywhere instead of Math.random so the remix is
+ * in [0, 1). Used everywhere instead of Math.random so the obfuscation is
  * reproducible from `seed` alone.
  */
 const makeRng = (seed: number) => () => {
@@ -138,13 +138,13 @@ const applyReorder = (triangles: Triangle[], rng: () => number): void => {
 }
 
 /**
- * Apply the remix ops and return a new non-indexed geometry. Pure: the input
+ * Apply the obfuscation ops and return a new non-indexed geometry. Pure: the input
  * geometry is never mutated. Deterministic given `seed`.
  *
  * Op order is subdivide → jitter → reorder, so jitter and reorder act on the
  * final, subdivided triangle set and the cheap reorder runs last.
  */
-export const remixGeometry = (geometry: THREE.BufferGeometry, opts?: RemixOptions): THREE.BufferGeometry => {
+export const obfuscateGeometry = (geometry: THREE.BufferGeometry, opts?: ObfuscateOptions): THREE.BufferGeometry => {
     const { reorder = true, subdivide = 0, jitter = 0, seed = 1 } = opts ?? {}
     const rng = makeRng(seed)
 
@@ -211,6 +211,6 @@ export const geometryToBinaryStl = (geometry: THREE.BufferGeometry): ArrayBuffer
     return buffer
 }
 
-/** Convenience: parse STL bytes → remix the geometry → serialize to binary STL. */
-export const remixStl = (input: ArrayBuffer, opts?: RemixOptions): ArrayBuffer =>
-    geometryToBinaryStl(remixGeometry(parseStl(input), opts))
+/** Convenience: parse STL bytes → obfuscate the geometry → serialize to binary STL. */
+export const obfuscateStl = (input: ArrayBuffer, opts?: ObfuscateOptions): ArrayBuffer =>
+    geometryToBinaryStl(obfuscateGeometry(parseStl(input), opts))

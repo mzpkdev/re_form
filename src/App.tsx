@@ -7,7 +7,7 @@ import { getManifold } from "./lib/modelStore"
 import { exportStl, verifyStlDimensions } from "./lib/stl"
 import { AssistantPanel, SettingsView } from "./modules/assistant"
 import { MeshToolsPanel } from "./modules/mesh-tools"
-import { RemixPanel } from "./modules/remix"
+import { ObfuscatePanel } from "./modules/obfuscate"
 import { Viewport } from "./modules/viewer"
 
 // No naming UI yet; the export plumbing is structured so a part name could be
@@ -17,7 +17,7 @@ const DEFAULT_PART_NAME = "model"
 
 export const App = () => {
     const [view, setView] = useState<"editor" | "settings">("editor")
-    const [activePanel, setActivePanel] = useState<"ai" | "mesh" | "remix" | null>(null)
+    const [activePanel, setActivePanel] = useState<"ai" | "mesh" | "obfuscate" | null>(null)
     const [stlFile, setStlFile] = useState<File | null>(null)
 
     const handleExport = () => {
@@ -57,7 +57,7 @@ export const App = () => {
                 <Sidebar activePanel={activePanel} onSelect={setActivePanel} onExport={handleExport} />
                 <Viewport file={stlFile} />
                 <MeshToolsPanel open={activePanel === "mesh"} onClose={() => setActivePanel(null)} />
-                <RemixPanel open={activePanel === "remix"} onClose={() => setActivePanel(null)} />
+                <ObfuscatePanel open={activePanel === "obfuscate"} onClose={() => setActivePanel(null)} />
                 <AssistantPanel open={activePanel === "ai"} onClose={() => setActivePanel(null)} />
             </main>
             {view === "settings" ? <SettingsView onClose={() => setView("editor")} /> : null}

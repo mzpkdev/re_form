@@ -5,7 +5,7 @@ import { cn } from "../../design/cn"
 import { initManifold } from "../../lib/manifold"
 import { geometryToManifold, meshToBufferGeometry } from "../../lib/model"
 import { getManifold, setManifold, useModelVersion } from "../../lib/modelStore"
-import { remixGeometry } from "./remix"
+import { obfuscateGeometry } from "./obfuscate"
 
 type Stats = { before: number; after: number }
 
@@ -17,8 +17,8 @@ const formatBytes = (bytes: number): string =>
     bytes < 1024 * 1024 ? `${Math.round(bytes / 1024).toLocaleString()} KB` : `${(bytes / (1024 * 1024)).toFixed(1)} MB`
 
 /**
- * Triangle ceiling for a remix. Subdivide quadruples the count per pass and the
- * whole pipeline (remix → weld → manifold validate) runs synchronously on the
+ * Triangle ceiling for an obfuscation pass. Subdivide quadruples the count per pass and the
+ * whole pipeline (obfuscate → weld → manifold validate) runs synchronously on the
  * main thread, so a much larger mesh freezes the tab. A safe upper bound, not a
  * hardware limit — tune if the budget proves too tight or too loose.
  */
@@ -35,12 +35,12 @@ const delay = (ms: number): Promise<void> => new Promise((resolve) => setTimeout
  * Resolve once the browser has actually painted a frame. Double rAF is the
  * reliable "after next paint" signal — rAF #1 runs before the paint, rAF #2
  * after — so awaiting this guarantees the blur overlay is on screen before the
- * synchronous remix begins and (potentially) freezes the main thread.
+ * synchronous obfuscation begins and (potentially) freezes the main thread.
  */
 const nextPaint = (): Promise<void> =>
     new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
 
-export const RemixPanel = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
+export const ObfuscatePanel = ({ open, onClose }: { open: boolean; onClose: () => void }) => {
     const [subdivide, setSubdivide] = useState(0)
     const [jitter, setJitter] = useState(0)
     const [pending, setPending] = useState(false)
@@ -56,7 +56,7 @@ export const RemixPanel = ({ open, onClose }: { open: boolean; onClose: () => vo
     const projectedTriangles = (model?.numTri() ?? 0) * 4 ** subdivide
     const overBudget = projectedTriangles > MAX_TRIANGLES
 
-    // Remix the loaded model and replace it in the store — the Viewport re-bakes
+    // Obfuscate the loaded model and replace it in the store — the Viewport re-bakes
     // from the new handle, so the preview updates in place. Reorder is omitted: the
     // export re-serializes through manifold's canonical order, so only subdivide and
     // jitter (real geometry changes) survive to the saved file.
@@ -66,17 +66,19 @@ export const RemixPanel = ({ open, onClose }: { open: boolean; onClose: () => vo
             return
         }
         // Guard the exponential subdivide blow-up before any heavy work: the pipeline
-        // runs synchronously on the main thread, so an oversized remix freezes the tab.
+        // runs synchronously on the main thread, so an oversized obfuscation freezes the tab.
         // The disabled button already blocks this; this backstop covers a model that
         // changed between render and click.
         const before = source.numTri()
         if (before * 4 ** subdivide > MAX_TRIANGLES) {
-            setError(`Too many triangles to remix (~${(before * 4 ** subdivide).toLocaleString()}). Lower Subdivide.`)
+            setError(
+                `Too many triangles to obfuscate (~${(before * 4 ** subdivide).toLocaleString()}). Lower Subdivide.`
+            )
             return
         }
         setError(null)
         // Paint a fullscreen blur and wait for it to actually hit the screen BEFORE the
-        // synchronous remix blocks the main thread — so the user always gets a cue, and if
+        // synchronous obfuscation blocks the main thread — so the user always gets a cue, and if
         // a heavy mesh does freeze the tab it freezes with the blur already visible.
         setOverlay("shown")
         await nextPaint()
@@ -84,26 +86,26 @@ export const RemixPanel = ({ open, onClose }: { open: boolean; onClose: () => vo
         try {
             const wasm = await initManifold()
             const indexed = meshToBufferGeometry(source.getMesh())
-            // remixGeometry works on a non-indexed triangle soup.
+            // obfuscateGeometry works on a non-indexed triangle soup.
             const soup = indexed.toNonIndexed()
             indexed.dispose()
             const seed = Math.floor(Math.random() * 0x7fffffff)
-            const remixed = remixGeometry(soup, { reorder: false, subdivide, jitter, seed })
+            const obfuscated = obfuscateGeometry(soup, { reorder: false, subdivide, jitter, seed })
             soup.dispose()
-            const after = remixed.getAttribute("position").count / 3
+            const after = obfuscated.getAttribute("position").count / 3
             try {
-                const next = geometryToManifold(wasm, remixed)
+                const next = geometryToManifold(wasm, obfuscated)
                 setManifold(next)
             } finally {
-                remixed.dispose()
+                obfuscated.dispose()
             }
             setStats({ before, after })
         } catch (caught) {
-            setError(caught instanceof Error ? caught.message : "Remix failed")
+            setError(caught instanceof Error ? caught.message : "Obfuscation failed")
         } finally {
             setPending(false)
         }
-        // Hold briefly so a fast remix still reads as a pulse, then fade the blur out.
+        // Hold briefly so a fast obfuscation still reads as a pulse, then fade the blur out.
         await delay(OVERLAY_HOLD_MS)
         setOverlay("fading")
         await delay(OVERLAY_FADE_MS)
@@ -126,7 +128,7 @@ export const RemixPanel = ({ open, onClose }: { open: boolean; onClose: () => vo
                 <div className="flex items-center justify-between border-b border-on-surface/10 bg-surface-container-low p-4">
                     <div className="flex items-center gap-2">
                         <Shuffle className="size-5 text-primary" />
-                        <h3 className="font-mono text-title-md text-on-surface">REMIX</h3>
+                        <h3 className="font-mono text-title-md text-on-surface">OBFUSCATE</h3>
                     </div>
                     <button type="button" onClick={onClose} className="text-tertiary hover:text-on-surface">
                         <X className="size-5" />
@@ -137,8 +139,8 @@ export const RemixPanel = ({ open, onClose }: { open: boolean; onClose: () => vo
                     {hasModel ? (
                         <>
                             <p className="font-sans text-body-sm text-tertiary">
-                                Remix the loaded model into a look-alike with different geometry and replace it in the
-                                viewport. Use Export to save the result.
+                                Obfuscate the loaded model into a look-alike with different geometry and replace it in
+                                the viewport. Use Export to save the result.
                             </p>
 
                             <div className="flex flex-col gap-4">
@@ -188,7 +190,7 @@ export const RemixPanel = ({ open, onClose }: { open: boolean; onClose: () => vo
                                     disabled={pending || overBudget || overlay !== "hidden"}
                                     className="w-full border border-transparent bg-primary py-3 font-mono text-label-caps text-on-primary transition-colors chamfer hover:border-on-surface hover:bg-primary-container hover:text-on-primary-container disabled:cursor-not-allowed disabled:opacity-50"
                                 >
-                                    {pending ? "Remixing…" : "Confirm"}
+                                    {pending ? "Obfuscating…" : "Confirm"}
                                 </button>
                                 {overBudget ? (
                                     <div className="font-mono text-tiny text-error">
@@ -212,7 +214,7 @@ export const RemixPanel = ({ open, onClose }: { open: boolean; onClose: () => vo
                         </>
                     ) : (
                         <p className="font-sans text-body-sm text-tertiary">
-                            Load a model first — Remix works on the model currently in the viewport.
+                            Load a model first — Obfuscate works on the model currently in the viewport.
                         </p>
                     )}
                 </div>
