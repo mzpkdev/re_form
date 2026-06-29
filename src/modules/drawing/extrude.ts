@@ -1,6 +1,7 @@
 import type { Manifold, ManifoldToplevel } from "manifold-3d"
-import { projectPoint } from "./project"
-import type { Plane, Polyline, Vec2, Vec3 } from "./types"
+import { projectPoint, unprojectPoint } from "./project"
+import { detectRegions } from "./regions"
+import type { Drawing, Plane, Polyline, Vec2, Vec3 } from "./types"
 
 /**
  * The 2D-drawing → 3D-solid bridge: turn a closed profile drawn on a principal
@@ -107,4 +108,46 @@ export const profileToManifold = (
             return rotated
         }
     }
+}
+
+/**
+ * Build the 3D solid DERIVED from a whole drawing: detect every closed region
+ * (connected-segment loops, see `detectRegions`), extrude each by
+ * `doc.extrudeDepth` along its plane's normal, and UNION them into a single solid.
+ *
+ * Each region's contour is lifted from its plane's 2D view space back to a 3D
+ * closed `Polyline` (so `profileToManifold` re-projects it consistently) before
+ * extrusion. Every per-region handle and every intermediate union result is
+ * freed; only the final unioned `Manifold` survives and the CALLER owns it.
+ * Returns `null` when the drawing has no closed region (so the caller can leave an
+ * imported solid untouched). React-free — `Manifold` is the interop boundary.
+ */
+export const drawingToManifold = (wasm: ManifoldToplevel, doc: Drawing): Manifold | null => {
+    const regions = detectRegions(doc)
+    if (regions.length === 0) {
+        return null
+    }
+
+    const solids = regions.map(({ plane, contour }) => {
+        const profile: Polyline = {
+            id: "region",
+            type: "polyline",
+            closed: true,
+            points: contour.map((p) => unprojectPoint(p, plane))
+        }
+        return profileToManifold(wasm, profile, plane, doc.extrudeDepth)
+    })
+
+    // Reduce the per-region solids into one via boolean union, freeing both inputs
+    // of each union (the running accumulator and the next solid) once consumed, so
+    // only the final handle remains live.
+    let result = solids[0]
+    for (let i = 1; i < solids.length; i++) {
+        const next = solids[i]
+        const merged = result.add(next)
+        result.delete()
+        next.delete()
+        result = merged
+    }
+    return result
 }

@@ -1,8 +1,9 @@
 import { describe, expect, it } from "bun:test"
 import { initManifold } from "../../lib/manifold"
-import { inferPlane, profileToManifold } from "./extrude"
+import { addEntity, createDrawing } from "./document"
+import { drawingToManifold, inferPlane, profileToManifold } from "./extrude"
 import { planeNormal, unprojectPoint } from "./project"
-import type { Plane, Polyline, Vec2 } from "./types"
+import type { Drawing, Plane, Polyline, Vec2 } from "./types"
 
 const context = describe
 
@@ -136,5 +137,63 @@ describe("extrude", () => {
             expect(() => profileToManifold(wasm, square, "front", 0)).toThrow()
             expect(() => profileToManifold(wasm, square, "front", -5)).toThrow()
         })
+    })
+})
+
+// A closed-polyline square built as a document entity (the shape `detectRegions`
+// walks), lifted onto a plane and offset in 2D so two of them stay disjoint.
+const squareDoc = (depth: number, plane: Plane = "front", offset: Vec2 = [0, 0]): Drawing => {
+    const corners: Vec2[] = SQUARE_2D.map(([x, y]) => [x + offset[0], y + offset[1]])
+    const doc = addEntity(createDrawing(), {
+        id: "sq",
+        type: "polyline",
+        closed: true,
+        points: corners.map((q) => unprojectPoint(q, plane))
+    })
+    return { ...doc, extrudeDepth: depth }
+}
+
+describe("drawingToManifold", () => {
+    it("extrudes one 40×40 square at the document depth (volume ≈ 16000)", async () => {
+        const wasm = await initManifold()
+        const solid = drawingToManifold(wasm, squareDoc(10))
+        expect(solid).not.toBeNull()
+        expect((solid as NonNullable<typeof solid>).volume()).toBeCloseTo(40 * 40 * 10, 1)
+        solid?.delete()
+    })
+
+    it("honors a non-default extrude depth", async () => {
+        const wasm = await initManifold()
+        const solid = drawingToManifold(wasm, squareDoc(25))
+        expect((solid as NonNullable<typeof solid>).volume()).toBeCloseTo(40 * 40 * 25, 1)
+        solid?.delete()
+    })
+
+    it("unions two disjoint squares into ~2× the single-square volume", async () => {
+        const wasm = await initManifold()
+        const base = squareDoc(10)
+        const far = squareDoc(10, "front", [200, 200])
+        const doc: Drawing = { ...base, entities: [...base.entities, ...far.entities] }
+        const solid = drawingToManifold(wasm, doc)
+        expect(solid).not.toBeNull()
+        // Disjoint, so the union volume is the exact sum of the two boxes.
+        expect((solid as NonNullable<typeof solid>).volume()).toBeCloseTo(2 * 40 * 40 * 10, 1)
+        solid?.delete()
+    })
+
+    it("returns null for a drawing with no closed region (an open polyline)", async () => {
+        const wasm = await initManifold()
+        const open = addEntity(createDrawing(), {
+            id: "open",
+            type: "polyline",
+            closed: false,
+            points: SQUARE_2D.map((q) => unprojectPoint(q, "front"))
+        })
+        expect(drawingToManifold(wasm, open)).toBeNull()
+    })
+
+    it("returns null for an empty drawing", async () => {
+        const wasm = await initManifold()
+        expect(drawingToManifold(wasm, createDrawing())).toBeNull()
     })
 })

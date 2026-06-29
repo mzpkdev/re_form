@@ -1,5 +1,5 @@
+import { DepthControl } from "./DepthControl"
 import { DrawingCanvas } from "./DrawingCanvas"
-import { ExtrudePanel } from "./ExtrudePanel"
 import { FileControl } from "./FileControl"
 import { GridControl } from "./GridControl"
 import { PlaneSwitcher } from "./PlaneSwitcher"
@@ -10,13 +10,15 @@ import { useUndoRedoKeymap } from "./useUndoRedoKeymap"
  * Mountable view for the 2D technical-drawing editor: the canvas fills the area
  * with the tool palette floating over its top-left corner, the plane switcher
  * floating top-center, the grid-size control floating top-right, the JSON
- * import/export card floating bottom-left, and the extrude card floating
+ * import/export card floating bottom-left, and the extrude-depth control floating
  * bottom-right. `useUndoRedoKeymap` arms the Cmd/Ctrl+Z (undo) / Cmd/Ctrl+Shift+Z
- * and Ctrl+Y (redo) shortcuts while this view is mounted. `onShow3D` flips the
- * shell to the 3D viewport after a successful extrude (the new solid is already
- * in the model store by then).
+ * and Ctrl+Y (redo) shortcuts while this view is mounted.
+ *
+ * The 3D solid is a DERIVED view of the drawing: there is no manual extrude here.
+ * Switching to the Editor view re-detects every closed region and extrudes it (see
+ * `App`/`drawingToManifold`); this view only sets the depth those extrusions use.
  */
-export const DrawingEditor = ({ onShow3D }: { onShow3D: () => void }) => {
+export const DrawingEditor = () => {
     useUndoRedoKeymap()
 
     return (
@@ -35,7 +37,7 @@ export const DrawingEditor = ({ onShow3D }: { onShow3D: () => void }) => {
                 <FileControl />
             </div>
             <div className="absolute right-4 bottom-4">
-                <ExtrudePanel onShow3D={onShow3D} />
+                <DepthControl />
             </div>
         </section>
     )

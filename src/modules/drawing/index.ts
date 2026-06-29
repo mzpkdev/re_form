@@ -8,6 +8,8 @@
 // Pure entity construction from drawn points (the testable core of the write
 // path) and the interaction state machine that drives it.
 export { buildEntity } from "./buildEntity"
+// UI: floating editor controls.
+export { DepthControl } from "./DepthControl"
 // UI: the mountable editor view, the SVG canvas, and the tool palette.
 export { DrawingCanvas } from "./DrawingCanvas"
 export { DrawingEditor } from "./DrawingEditor"
@@ -28,15 +30,16 @@ export {
     redo,
     removeEntities,
     removeEntity,
+    setExtrudeDepth,
     setGridSize,
     subscribe,
     undo,
     updateEntity,
     useDrawing,
+    useExtrudeDepth,
     useGridSize,
     useHistory
 } from "./documentStore"
-export { ExtrudePanel } from "./ExtrudePanel"
 // Editor store: ephemeral, never-serialized editor state.
 export {
     clearSelection,
@@ -54,8 +57,9 @@ export {
     usePreview,
     useSelection
 } from "./editorStore"
-// Extrude bridge: pure 2D-profile → 3D-solid (manifold) construction.
-export { inferPlane, profileToManifold } from "./extrude"
+// Extrude bridge: pure 2D-profile → 3D-solid (manifold) construction, plus the
+// whole-drawing derived solid (every closed region, unioned).
+export { drawingToManifold, inferPlane, profileToManifold } from "./extrude"
 // File I/O UI: export/import the 2D drawing document as JSON.
 export { FileControl } from "./FileControl"
 export { GridControl } from "./GridControl"
@@ -65,6 +69,8 @@ export { PlaneSwitcher } from "./PlaneSwitcher"
 // Persistence: localStorage autosave + hydrate-once for the drawing document.
 export { initPersistence, loadStoredDrawing, STORAGE_KEY, saveDrawing } from "./persistence"
 export { flattenEntity, planeNormal, projectPoint, tessellateEntity, unprojectPoint } from "./project"
+// Pure closed-region detection: connected-segment loops → contours per plane.
+export { detectRegions } from "./regions"
 export { deserialize, serialize } from "./serialize"
 export { constrainToAngle, snapToGrid } from "./snap"
 export { Toolbar } from "./Toolbar"

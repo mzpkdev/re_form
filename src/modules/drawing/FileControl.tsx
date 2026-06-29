@@ -11,7 +11,7 @@ import { deserialize, serialize } from "./serialize"
  * `loadDrawing` (which replaces the doc and clears undo history). A malformed
  * file makes `deserialize` throw; that is caught and surfaced inline — the editor
  * never crashes on bad input. Styled with VERTEX CORE tokens to match the
- * floating `Toolbar`, `GridControl`, and `ExtrudePanel`.
+ * floating `Toolbar`, `GridControl`, and `DepthControl`.
  */
 export const FileControl = () => {
     const drawing = useDrawing()

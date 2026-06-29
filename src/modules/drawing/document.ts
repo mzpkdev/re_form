@@ -9,11 +9,15 @@ import type { Drawing, Entity } from "./types"
 /** The default grid spacing (mm) a fresh document starts with. */
 export const DEFAULT_GRID_SIZE = 10
 
-/** An empty document on the default 10 mm grid. */
+/** The default extrusion depth (mm) a fresh document starts with. */
+export const DEFAULT_EXTRUDE_DEPTH = 10
+
+/** An empty document on the default 10 mm grid and 10 mm extrude depth. */
 export const createDrawing = (): Drawing => ({
     version: 1,
     units: "mm",
     gridSize: DEFAULT_GRID_SIZE,
+    extrudeDepth: DEFAULT_EXTRUDE_DEPTH,
     entities: []
 })
 

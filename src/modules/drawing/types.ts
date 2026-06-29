@@ -59,6 +59,13 @@ export interface Drawing {
      * 10 mm on a fresh document.
      */
     gridSize: number
+    /**
+     * Extrusion depth in millimetres for the derived 3D solid. The Editor view
+     * extrudes every closed region detected in the drawing by this depth along
+     * its plane's normal. Persisted so it round-trips. Defaults to 10 mm on a
+     * fresh document.
+     */
+    extrudeDepth: number
     entities: Entity[]
 }
 

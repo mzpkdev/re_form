@@ -100,6 +100,17 @@ export const setGridSize = (mm: number): void => {
     commit({ ...present, gridSize: mm })
 }
 
+/**
+ * Set the document's extrusion depth (mm), undoable so it persists and
+ * round-trips. Mirrors `setGridSize`: a no-op (no commit, no history entry) when
+ * the value is unchanged or not a positive finite number — callers settle on one
+ * value before committing rather than flooding undo history on every keystroke.
+ */
+export const setExtrudeDepth = (mm: number): void => {
+    if (!Number.isFinite(mm) || mm <= 0 || mm === present.extrudeDepth) return
+    commit({ ...present, extrudeDepth: mm })
+}
+
 /** Step back one commit. No-op (no notify) when there is nothing to undo. */
 export const undo = (): void => {
     const previous = past.pop()
@@ -145,6 +156,11 @@ const getGridSize = (): number => present.gridSize
 
 /** The document's grid spacing (mm), re-rendering only when it changes. */
 export const useGridSize = (): number => useSyncExternalStore(subscribe, getGridSize, getGridSize)
+
+const getExtrudeDepth = (): number => present.extrudeDepth
+
+/** The document's extrusion depth (mm), re-rendering only when it changes. */
+export const useExtrudeDepth = (): number => useSyncExternalStore(subscribe, getExtrudeDepth, getExtrudeDepth)
 
 const getHistorySnapshot = (): number => (past.length > 0 ? 1 : 0) + (future.length > 0 ? 2 : 0)
 

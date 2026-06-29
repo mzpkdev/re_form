@@ -1,4 +1,4 @@
-import { DEFAULT_GRID_SIZE } from "./document"
+import { DEFAULT_EXTRUDE_DEPTH, DEFAULT_GRID_SIZE } from "./document"
 import type { Arc, Circle, Drawing, Entity, Line, Polyline, Vec3 } from "./types"
 
 /**
@@ -96,19 +96,24 @@ export const deserialize = (json: string): Drawing => {
     if (parsed.units !== "mm") throw new Error(`drawing: "units" must be "mm", got ${JSON.stringify(parsed.units)}`)
     if (!Array.isArray(parsed.entities)) throw new Error('drawing: "entities" must be an array')
 
-    // gridSize is lenient/forward-compatible: validated as a positive finite
-    // number when present, defaulted when an older document omits it entirely.
-    const gridSize = parseGridSize(parsed.gridSize)
+    // gridSize and extrudeDepth are lenient/forward-compatible: each validated as
+    // a positive finite number when present, defaulted when an older document
+    // omits it entirely.
+    const gridSize = parsePositiveDimension(parsed.gridSize, "gridSize", DEFAULT_GRID_SIZE)
+    const extrudeDepth = parsePositiveDimension(parsed.extrudeDepth, "extrudeDepth", DEFAULT_EXTRUDE_DEPTH)
 
     const entities = parsed.entities.map((entity, index) => validateEntity(entity, index))
-    return { version: 1, units: "mm", gridSize, entities }
+    return { version: 1, units: "mm", gridSize, extrudeDepth, entities }
 }
 
-/** A grid size must be a positive, finite number; an absent one defaults to 10. */
-const parseGridSize = (value: unknown): number => {
-    if (value === undefined) return DEFAULT_GRID_SIZE
+/**
+ * A positive-finite document dimension (`gridSize`, `extrudeDepth`). An absent
+ * value falls back to `fallback`; a present one must be a positive finite number.
+ */
+const parsePositiveDimension = (value: unknown, field: string, fallback: number): number => {
+    if (value === undefined) return fallback
     if (!isFiniteNumber(value) || value <= 0) {
-        throw new Error(`drawing: "gridSize" must be a positive finite number, got ${JSON.stringify(value)}`)
+        throw new Error(`drawing: "${field}" must be a positive finite number, got ${JSON.stringify(value)}`)
     }
     return value
 }

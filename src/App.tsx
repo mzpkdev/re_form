@@ -1,12 +1,13 @@
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import * as THREE from "three"
 import { Sidebar, TopBar } from "./components"
 import { cn } from "./design/cn"
+import { initManifold } from "./lib/manifold"
 import { meshToBufferGeometry } from "./lib/model"
-import { getManifold } from "./lib/modelStore"
+import { getManifold, setManifold } from "./lib/modelStore"
 import { exportStl, verifyStlDimensions } from "./lib/stl"
 import { AssistantPanel, SettingsView } from "./modules/assistant"
-import { DrawingEditor } from "./modules/drawing"
+import { DrawingEditor, drawingToManifold, getDrawing } from "./modules/drawing"
 import { MeshToolsPanel } from "./modules/mesh-tools"
 import { ObfuscatePanel } from "./modules/obfuscate"
 import { Viewport } from "./modules/viewer"
@@ -20,6 +21,36 @@ export const App = () => {
     const [view, setView] = useState<"editor" | "settings" | "draw">("editor")
     const [activePanel, setActivePanel] = useState<"ai" | "mesh" | "obfuscate" | null>(null)
     const [stlFile, setStlFile] = useState<File | null>(null)
+
+    // The 3D solid is a DERIVED view of the drawing: on every entry into the
+    // Editor view, re-detect the drawing's closed regions and extrude them into
+    // the live solid the Viewport renders. Recomputed each entry because the
+    // drawing may have changed in the Draw view since last time.
+    //
+    // Race/clobber safety:
+    //   - `cancelled` is flipped by the cleanup, so a rapid Draw↔Editor toggle (or
+    //     leaving the Editor before the WASM promise resolves) drops the stale
+    //     result instead of writing it — only the latest entry's build can win.
+    //   - We `setManifold` only when the build is non-null, so entering the Editor
+    //     with no closed shape leaves an imported STL untouched rather than
+    //     clobbering it with an empty solid.
+    useEffect(() => {
+        if (view !== "editor") return
+        let cancelled = false
+        initManifold().then((wasm) => {
+            if (cancelled) return
+            const solid = drawingToManifold(wasm, getDrawing())
+            if (cancelled) {
+                // Lost the race after the build; the handle is ours to free.
+                solid?.delete()
+                return
+            }
+            if (solid) setManifold(solid)
+        })
+        return () => {
+            cancelled = true
+        }
+    }, [view])
 
     const handleExport = () => {
         const m = getManifold()
@@ -65,7 +96,7 @@ export const App = () => {
             ) : null}
             {view === "draw" ? (
                 <main className="flex min-h-0 flex-1">
-                    <DrawingEditor onShow3D={() => setView("editor")} />
+                    <DrawingEditor />
                 </main>
             ) : null}
             {view === "settings" ? <SettingsView onClose={() => setView("editor")} /> : null}
