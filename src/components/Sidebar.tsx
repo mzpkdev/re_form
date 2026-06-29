@@ -1,7 +1,7 @@
-import { Bot, SlidersHorizontal } from "lucide-react"
+import { Bot, Shuffle, SlidersHorizontal } from "lucide-react"
 import { cn } from "../design/cn"
 
-type Panel = "ai" | "mesh"
+type Panel = "ai" | "mesh" | "remix"
 
 const NavItem = ({
     icon: Icon,
@@ -45,6 +45,7 @@ export const Sidebar = ({
             <h2 className="font-mono text-xl font-semibold text-on-primary">PROJECT_NAME</h2>
         </div>
         <nav className="flex flex-1 flex-col gap-2 py-4">
+            <NavItem icon={Shuffle} label="Remix" active={activePanel === "remix"} onClick={() => onSelect("remix")} />
             <NavItem
                 icon={SlidersHorizontal}
                 label="Mesh Tools"
