@@ -1,12 +1,19 @@
-import type { Manifold, ManifoldToplevel } from "manifold-3d"
-import { projectPoint, unprojectPoint } from "./project"
+import type { CrossSection, Manifold, ManifoldToplevel } from "manifold-3d"
+import { unprojectPoint } from "./project"
 import { detectRegions } from "./regions"
-import type { Drawing, Plane, Polyline, Vec2, Vec3 } from "./types"
+import type { Drawing, Plane, Vec2, Vec3 } from "./types"
 
 /**
- * The 2D-drawing → 3D-solid bridge: turn a closed profile drawn on a principal
- * plane into a manifold solid, oriented so the solid's base coincides with the
- * drawn profile and it extrudes along the plane's +normal.
+ * The 2D-drawing → 3D-solid bridge, by orthographic-VIEW reconstruction.
+ *
+ * Each principal plane is treated as an orthographic VIEW: a view's silhouette,
+ * extruded along that view's normal across the whole part, is a "bar" (a square
+ * tube for a square silhouette). The solid is the INTERSECTION of every view's
+ * bar — the region that lies inside all the drawn silhouettes at once. This is
+ * classic three-view reconstruction: the intersection is the maximal solid whose
+ * orthographic silhouettes match the drawings (three 2×2 squares on
+ * front/top/side ⇒ a 2×2×2 cube). At least two distinct views are required; a
+ * single silhouette cannot bound the third axis, so it yields no solid.
  *
  * v1 SIMPLIFICATION (matching `project.ts`): the principal planes pass through
  * the origin, so the orienting transforms are pure rotations about the origin.
@@ -27,6 +34,18 @@ const signedArea = (pts: Vec2[]): number => {
         area += x1 * y2 - x2 * y1
     }
     return area / 2
+}
+
+/** The world-axis index the local +z extrusion direction maps to, per plane. */
+const normalAxis = (plane: Plane): 0 | 1 | 2 => {
+    switch (plane) {
+        case "front":
+            return 2 // +z
+        case "top":
+            return 1 // +y
+        case "side":
+            return 0 // +x
+    }
 }
 
 /**
@@ -53,74 +72,90 @@ export const inferPlane = (points: Vec3[]): Plane | null => {
 }
 
 /**
- * Extrude a closed profile into a solid `depthMm` deep along the plane's normal.
- *
- * Projects the profile's 3D points to the plane's 2D view space, builds a
- * `CrossSection` from that single contour, extrudes it (base at z=0, growing
- * +z), then rotates so the result sits where it was drawn:
+ * Orient a locally-extruded solid (base at local z=0, growing +z) onto its
+ * plane so its extrusion runs along the plane's normal, freeing the input:
  *   - front → identity (the drawing plane already is z=0, extruding +z)
  *   - top   → rotate [-90, 0, 0] (local +z → world +y)
  *   - side  → rotate [0, 90, 0]  (local +z → world +x)
- *
- * Every intermediate handle (the `CrossSection`, the pre-rotation `Manifold`) is
- * freed; only the final `Manifold` is returned and the caller owns it. Throws on
- * a non-closed profile, fewer than 3 points, or a non-positive depth; manifold
- * itself throws on a self-intersecting/degenerate contour.
  */
-export const profileToManifold = (
-    wasm: ManifoldToplevel,
-    profile: Polyline,
-    plane: Plane,
-    depthMm: number
-): Manifold => {
-    if (!profile.closed) {
-        throw new Error("Profile must be a closed polyline to extrude.")
-    }
-    if (profile.points.length < 3) {
-        throw new Error("Profile must have at least 3 points to extrude.")
-    }
-    if (!(depthMm > 0)) {
-        throw new Error("Extrude depth must be greater than 0.")
-    }
-
-    const contour = profile.points.map((p) => projectPoint(p, plane))
-    // A clockwise contour has negative signed area, which the default "Positive"
-    // fill rule drops to an empty cross-section. Normalize to counter-clockwise so
-    // a profile drawn in either direction yields a solid.
-    if (signedArea(contour) < 0) {
-        contour.reverse()
-    }
-    const cross = new wasm.CrossSection(contour)
-    const solid = cross.extrude(depthMm)
-    cross.delete()
-
+const orientToPlane = (local: Manifold, plane: Plane): Manifold => {
     switch (plane) {
         case "front":
-            return solid
+            return local
         case "top": {
-            const rotated = solid.rotate([-90, 0, 0])
-            solid.delete()
+            const rotated = local.rotate([-90, 0, 0])
+            local.delete()
             return rotated
         }
         case "side": {
-            const rotated = solid.rotate([0, 90, 0])
-            solid.delete()
+            const rotated = local.rotate([0, 90, 0])
+            local.delete()
             return rotated
         }
     }
 }
 
 /**
- * Build the 3D solid DERIVED from a whole drawing: detect every closed region
- * (connected-segment loops, see `detectRegions`), extrude each by
- * `doc.extrudeDepth` along its plane's normal, and UNION them into a single solid.
+ * Extrude a closed 2D view-space contour into a solid that spans the world
+ * interval `[lo, hi]` along its plane's normal.
  *
- * Each region's contour is lifted from its plane's 2D view space back to a 3D
- * closed `Polyline` (so `profileToManifold` re-projects it consistently) before
- * extrusion. Every per-region handle and every intermediate union result is
- * freed; only the final unioned `Manifold` survives and the CALLER owns it.
- * Returns `null` when the drawing has no closed region (so the caller can leave an
- * imported solid untouched). React-free — `Manifold` is the interop boundary.
+ * Normalizes the contour's winding to counter-clockwise (a clockwise contour has
+ * negative signed area, which the default "Positive" fill rule drops to an empty
+ * cross-section), builds a `CrossSection`, extrudes it `hi - lo` deep (base at
+ * local z=0, growing +z), shifts it to start at local z=`lo`, then orients it
+ * onto the plane (see `orientToPlane`). So a local point `(u, v, w)` lands at
+ * `unprojectPoint([u, v], plane) + w * planeNormal(plane)`, and `w ∈ [lo, hi]`
+ * becomes the world span along the normal axis.
+ *
+ * Every intermediate handle (the `CrossSection`, the pre-translate/pre-rotate
+ * `Manifold`s) is freed; only the final `Manifold` is returned and the caller
+ * owns it. Throws on fewer than 3 points or a non-positive span; manifold itself
+ * throws on a self-intersecting/degenerate contour.
+ */
+export const extrudeProfileBetween = (
+    wasm: ManifoldToplevel,
+    contour2D: Vec2[],
+    plane: Plane,
+    lo: number,
+    hi: number
+): Manifold => {
+    if (contour2D.length < 3) {
+        throw new Error("Profile must have at least 3 points to extrude.")
+    }
+    if (!(hi > lo)) {
+        throw new Error("Extrude span must have hi greater than lo.")
+    }
+
+    const cross = new wasm.CrossSection(normalizeWinding(contour2D))
+    const extruded = cross.extrude(hi - lo)
+    cross.delete()
+    // Shift the base from local z=0 to local z=lo, so the solid spans [lo, hi].
+    const shifted = extruded.translate([0, 0, lo])
+    extruded.delete()
+    return orientToPlane(shifted, plane)
+}
+
+/**
+ * Build the 3D solid RECONSTRUCTED from a whole drawing's orthographic views.
+ *
+ * `detectRegions` finds every closed region (connected-segment loops) and the
+ * plane it lies on. Regions are grouped by plane; each plane with ≥1 region is a
+ * VIEW. The reconstruction needs at least TWO distinct views — one silhouette
+ * alone leaves the third axis unbounded — so a drawing with fewer than two
+ * populated planes (or no closed region at all) returns `null`, leaving any
+ * imported solid untouched.
+ *
+ * For each view: union its regions' contours into a single silhouette
+ * `CrossSection`, then extrude that silhouette into a BAR spanning the whole part
+ * along the view's normal (`[bboxMin[axis] - M, bboxMax[axis] + M]`, M a small
+ * margin) via `extrudeProfileBetween`. The margin only avoids coincident-cap
+ * degeneracy where bars meet — it lies along the normal and is trimmed away by
+ * the other views, so it never affects the result. INTERSECTING all the bars
+ * yields the reconstructed solid (three 2×2 squares ⇒ a 2×2×2 cube).
+ *
+ * Every per-view `CrossSection`, every intermediate union, every bar, and both
+ * inputs of each intersection are freed; only the final `Manifold` survives and
+ * the CALLER owns it. React-free — `Manifold` is the interop boundary.
  */
 export const drawingToManifold = (wasm: ManifoldToplevel, doc: Drawing): Manifold | null => {
     const regions = detectRegions(doc)
@@ -128,26 +163,100 @@ export const drawingToManifold = (wasm: ManifoldToplevel, doc: Drawing): Manifol
         return null
     }
 
-    const solids = regions.map(({ plane, contour }) => {
-        const profile: Polyline = {
-            id: "region",
-            type: "polyline",
-            closed: true,
-            points: contour.map((p) => unprojectPoint(p, plane))
+    // Group regions by their view-plane; only populated planes are views.
+    const byPlane = new Map<Plane, Vec2[][]>()
+    for (const { plane, contour } of regions) {
+        const bucket = byPlane.get(plane)
+        if (bucket) {
+            bucket.push(contour)
+        } else {
+            byPlane.set(plane, [contour])
         }
-        return profileToManifold(wasm, profile, plane, doc.extrudeDepth)
-    })
+    }
+    // A single silhouette cannot bound the axis along its own normal.
+    if (byPlane.size < 2) {
+        return null
+    }
 
-    // Reduce the per-region solids into one via boolean union, freeing both inputs
-    // of each union (the running accumulator and the next solid) once consumed, so
-    // only the final handle remains live.
-    let result = solids[0]
-    for (let i = 1; i < solids.length; i++) {
-        const next = solids[i]
-        const merged = result.add(next)
+    // Global 3D bounding box over every region point (lifted to world space),
+    // so each view's bar can span the whole part along its normal.
+    const min: Vec3 = [Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY, Number.POSITIVE_INFINITY]
+    const max: Vec3 = [Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY, Number.NEGATIVE_INFINITY]
+    for (const { plane, contour } of regions) {
+        for (const p of contour) {
+            const w = unprojectPoint(p, plane)
+            for (let i = 0; i < 3; i++) {
+                if (w[i] < min[i]) min[i] = w[i]
+                if (w[i] > max[i]) max[i] = w[i]
+            }
+        }
+    }
+    // A small margin along the normal only (trimmed away by the other views): a
+    // fraction of the bbox diagonal, floored at 1 mm, so it scales with the part.
+    const diagonal = Math.hypot(max[0] - min[0], max[1] - min[1], max[2] - min[2])
+    const margin = Math.max(1, diagonal * 0.01)
+
+    // One bar per view: union the view's silhouettes into a single contour set,
+    // extrude across the part, orient onto the plane.
+    const bars: Manifold[] = []
+    for (const [plane, contours] of byPlane) {
+        const axis = normalAxis(plane)
+        const lo = min[axis] - margin
+        const hi = max[axis] + margin
+        bars.push(extrudeSilhouetteBar(wasm, contours, plane, lo, hi))
+    }
+
+    // Intersect every bar, freeing both inputs of each step so only the running
+    // result stays live; the final handle is the reconstructed solid.
+    let result = bars[0]
+    for (let i = 1; i < bars.length; i++) {
+        const next = bars[i]
+        const merged = result.intersect(next)
         result.delete()
         next.delete()
         result = merged
     }
     return result
+}
+
+/**
+ * One view's BAR: union the view's silhouette contours into a single
+ * `CrossSection` (so overlapping/touching regions become one outline), then
+ * extrude+orient it across `[lo, hi]` along the plane's normal. Each contour's
+ * own `CrossSection` and every intermediate union is freed; the caller owns the
+ * returned `Manifold`. With a single contour this is just `extrudeProfileBetween`.
+ */
+const extrudeSilhouetteBar = (
+    wasm: ManifoldToplevel,
+    contours: Vec2[][],
+    plane: Plane,
+    lo: number,
+    hi: number
+): Manifold => {
+    if (contours.length === 1) {
+        return extrudeProfileBetween(wasm, contours[0], plane, lo, hi)
+    }
+
+    let silhouette: CrossSection = new wasm.CrossSection(normalizeWinding(contours[0]))
+    for (let i = 1; i < contours.length; i++) {
+        const next = new wasm.CrossSection(normalizeWinding(contours[i]))
+        const merged = silhouette.add(next)
+        silhouette.delete()
+        next.delete()
+        silhouette = merged
+    }
+    const extruded = silhouette.extrude(hi - lo)
+    silhouette.delete()
+    const shifted = extruded.translate([0, 0, lo])
+    extruded.delete()
+    return orientToPlane(shifted, plane)
+}
+
+/** A copy of `contour` wound counter-clockwise (reversed when signed area < 0). */
+const normalizeWinding = (contour: Vec2[]): Vec2[] => {
+    const out = contour.map(([x, y]): Vec2 => [x, y])
+    if (signedArea(out) < 0) {
+        out.reverse()
+    }
+    return out
 }

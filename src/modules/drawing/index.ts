@@ -8,8 +8,6 @@
 // Pure entity construction from drawn points (the testable core of the write
 // path) and the interaction state machine that drives it.
 export { buildEntity } from "./buildEntity"
-// UI: floating editor controls.
-export { DepthControl } from "./DepthControl"
 // UI: the mountable editor view, the SVG canvas, and the tool palette.
 export { DrawingCanvas } from "./DrawingCanvas"
 export { DrawingEditor } from "./DrawingEditor"
@@ -30,13 +28,11 @@ export {
     redo,
     removeEntities,
     removeEntity,
-    setExtrudeDepth,
     setGridSize,
     subscribe,
     undo,
     updateEntity,
     useDrawing,
-    useExtrudeDepth,
     useGridSize,
     useHistory
 } from "./documentStore"
@@ -58,8 +54,9 @@ export {
     useSelection
 } from "./editorStore"
 // Extrude bridge: pure 2D-profile → 3D-solid (manifold) construction, plus the
-// whole-drawing derived solid (every closed region, unioned).
-export { drawingToManifold, inferPlane, profileToManifold } from "./extrude"
+// whole-drawing derived solid (each populated plane as an orthographic view,
+// silhouettes extruded into bars and intersected).
+export { drawingToManifold, extrudeProfileBetween, inferPlane } from "./extrude"
 // File I/O UI: export/import the 2D drawing document as JSON.
 export { FileControl } from "./FileControl"
 export { GridControl } from "./GridControl"

@@ -9,12 +9,11 @@ const circle = (id: string): Circle => ({ id, type: "circle", center: [0, 0, 0],
 
 describe("document", () => {
     context("createDrawing", () => {
-        it("makes an empty mm document at version 1 on the default 10 mm grid and 10 mm depth", () => {
+        it("makes an empty mm document at version 1 on the default 10 mm grid", () => {
             expect(createDrawing()).toEqual({
                 version: 1,
                 units: "mm",
                 gridSize: 10,
-                extrudeDepth: 10,
                 entities: []
             })
         })
