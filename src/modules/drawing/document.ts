@@ -46,6 +46,19 @@ export const removeEntity = (doc: Drawing, id: string): Drawing => ({
     entities: doc.entities.filter((entity) => entity.id !== id)
 })
 
+/**
+ * Drop every entity whose id is in `ids` (a Set lookup, so deleting many at once
+ * stays linear), returning a new document. When nothing matches — an empty
+ * `ids`, or ids absent from the document — the original document is returned
+ * unchanged so callers can treat a missing target as a no-op.
+ */
+export const removeEntities = (doc: Drawing, ids: string[]): Drawing => {
+    const drop = new Set(ids)
+    const entities = doc.entities.filter((entity) => !drop.has(entity.id))
+    if (entities.length === doc.entities.length) return doc
+    return { ...doc, entities }
+}
+
 /** The entity with id `id`, or `undefined` when none matches. */
 export const getEntity = (doc: Drawing, id: string): Entity | undefined =>
     doc.entities.find((entity) => entity.id === id)

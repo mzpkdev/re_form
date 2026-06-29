@@ -9,6 +9,7 @@ import {
     loadDrawing,
     newDrawing,
     redo,
+    removeEntities,
     removeEntity,
     setGridSize,
     undo,
@@ -45,6 +46,35 @@ describe("documentStore", () => {
             removeEntity("a")
             const afterRemove = getDrawing()
             expect(afterRemove).not.toBe(afterUpdate)
+        })
+    })
+
+    context("removeEntities", () => {
+        it("removes every listed entity in ONE undoable step", () => {
+            addEntity(line("a"))
+            addEntity(circle("b"))
+            addEntity(line("c"))
+
+            removeEntities(["a", "c"])
+            expect(getDrawing().entities.map((e) => e.id)).toEqual(["b"])
+
+            // A single undo brings BOTH back — proof it was one commit.
+            undo()
+            expect(getDrawing().entities.map((e) => e.id)).toEqual(["a", "b", "c"])
+        })
+
+        it("is a no-op (no commit, no history entry) for an empty id list", () => {
+            addEntity(line("a"))
+            const before = getDrawing()
+            removeEntities([])
+            expect(getDrawing()).toBe(before)
+        })
+
+        it("is a no-op (no commit, no history entry) when nothing matches", () => {
+            addEntity(line("a"))
+            const before = getDrawing()
+            removeEntities(["x", "y"])
+            expect(getDrawing()).toBe(before)
         })
     })
 

@@ -31,6 +31,10 @@
     /* The in-progress rubber-band ghost: the primary accent so it reads as
        "live, not yet committed" against the dark entity ink. */
     --color-drawing-preview: #ec6530;
+    /* A selected entity's highlight — a saturated blue, a third distinct hue
+       from the dark entity ink and the orange preview/snap accent, so a
+       selection never reads as "live ghost" or plain committed geometry. */
+    --color-drawing-selected: #2f7fff;
 
     /* ---- Color · Surface & background ---- */
     --color-background: #faf9fe;
@@ -119,6 +123,11 @@
         100% 100%,
         0 100%
     );
+}
+/* A heavier SVG stroke for emphasis (selected entities) — Tailwind's default
+   `stroke-*` scale stops at 2, and arbitrary values are banned, so name it. */
+@utility stroke-emphasis {
+    stroke-width: 3;
 }
 @utility bg-3d-grid {
     --grid-cell: 40px;

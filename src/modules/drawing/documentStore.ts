@@ -1,6 +1,7 @@
 import { useSyncExternalStore } from "react"
 import {
     addEntity as applyAddEntity,
+    removeEntities as applyRemoveEntities,
     removeEntity as applyRemoveEntity,
     updateEntity as applyUpdateEntity,
     createDrawing
@@ -69,6 +70,18 @@ export const updateEntity = (id: string, patch: Partial<Entity>): void => {
 /** Remove the entity with id `id` (undoable). */
 export const removeEntity = (id: string): void => {
     commit(applyRemoveEntity(present, id))
+}
+
+/**
+ * Remove every entity in `ids` as ONE undoable step, so a multi-entity delete
+ * reverses in a single undo. A no-op (no commit, no history entry) when `ids` is
+ * empty or matches nothing — the pure op returns the same reference, and only a
+ * genuine change is worth an undo boundary.
+ */
+export const removeEntities = (ids: string[]): void => {
+    const next = applyRemoveEntities(present, ids)
+    if (next === present) return
+    commit(next)
 }
 
 /**

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { addEntity, createDrawing, getEntity, removeEntity, updateEntity } from "./document"
+import { addEntity, createDrawing, getEntity, removeEntities, removeEntity, updateEntity } from "./document"
 import type { Circle, Line } from "./types"
 
 const context = describe
@@ -80,6 +80,34 @@ describe("document", () => {
             const doc = addEntity(createDrawing(), line("a"))
             const next = removeEntity(doc, "missing")
             expect(next.entities).toEqual(doc.entities)
+        })
+    })
+
+    context("removeEntities", () => {
+        it("drops every matching entity and leaves the input untouched", () => {
+            const doc = addEntity(addEntity(addEntity(createDrawing(), line("a")), circle("b")), line("c"))
+            const next = removeEntities(doc, ["a", "c"])
+
+            expect(next.entities.map((e) => e.id)).toEqual(["b"])
+            // input never mutated
+            expect(doc.entities.map((e) => e.id)).toEqual(["a", "b", "c"])
+            expect(next).not.toBe(doc)
+        })
+
+        it("ignores ids that are absent, removing only the ones that match", () => {
+            const doc = addEntity(addEntity(createDrawing(), line("a")), circle("b"))
+            const next = removeEntities(doc, ["a", "missing"])
+            expect(next.entities.map((e) => e.id)).toEqual(["b"])
+        })
+
+        it("is a no-op (returns the same doc reference) for an empty id list", () => {
+            const doc = addEntity(createDrawing(), line("a"))
+            expect(removeEntities(doc, [])).toBe(doc)
+        })
+
+        it("is a no-op (returns the same doc reference) when nothing matches", () => {
+            const doc = addEntity(createDrawing(), line("a"))
+            expect(removeEntities(doc, ["x", "y"])).toBe(doc)
         })
     })
 })

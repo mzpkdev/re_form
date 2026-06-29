@@ -15,8 +15,8 @@ export { DrawingEditor } from "./DrawingEditor"
 // re-exported from the store above instead).
 export { createDrawing, getEntity } from "./document"
 // Document store: serialized doc + undo/redo. Its actions ARE the public
-// mutation API, so `addEntity`/`updateEntity`/`removeEntity` here are the
-// single-arg store actions, not the raw pure ops of the same name.
+// mutation API, so `addEntity`/`updateEntity`/`removeEntity`/`removeEntities`
+// here are the single-arg store actions, not the raw pure ops of the same name.
 export {
     addEntity,
     canRedo,
@@ -26,6 +26,7 @@ export {
     loadDrawing,
     newDrawing,
     redo,
+    removeEntities,
     removeEntity,
     setGridSize,
     undo,
@@ -52,6 +53,9 @@ export {
     useSelection
 } from "./editorStore"
 export { GridControl } from "./GridControl"
+// Pure pointer-vs-entity hit testing (the testable core of click selection).
+export { hitTest } from "./hitTest"
+export { PlaneSwitcher } from "./PlaneSwitcher"
 export { flattenEntity, planeNormal, projectPoint, tessellateEntity, unprojectPoint } from "./project"
 export { deserialize, serialize } from "./serialize"
 export { constrainToAngle, snapToGrid } from "./snap"

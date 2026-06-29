@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
-import { useDrawing, useGridSize } from "./documentStore"
-import { useActivePlane, useActiveTool, usePreview } from "./editorStore"
+import { removeEntities, useDrawing, useGridSize } from "./documentStore"
+import { clearSelection, setSelection, useActivePlane, useActiveTool, usePreview, useSelection } from "./editorStore"
+import { hitTest } from "./hitTest"
 import { flattenEntity } from "./project"
 import { snapToGrid } from "./snap"
 import type { Entity, Plane, Vec2 } from "./types"
@@ -58,20 +59,34 @@ const MAX_GRID_LINES_ACROSS = 400
 const MIN_SPAN = 1
 const MAX_SPAN = 100_000
 
+/**
+ * Pointer travel (screen px) under which a select-tool press counts as a CLICK
+ * (hit-test) rather than a PAN. Above it, the drag panned and selection is left
+ * alone.
+ */
+const CLICK_SLOP_PX = 4
+
+/** Pick radius (screen px) for click selection, converted to world units per click. */
+const PICK_RADIUS_PX = 8
+
 const flippedY = "scale(1,-1)"
 
 /**
- * Read-only SVG renderer for the drawing document on the active plane.
+ * Interactive SVG renderer for the drawing document on the active plane.
  *
  * Everything visible — grid, origin axes, entities — lives inside ONE
  * `scale(1,-1)` group so the whole scene shares a single y-up coordinate space
  * (SVG's y points down). The `viewBox` held in state is the pan/zoom window; a
  * `ResizeObserver` keeps it square-aspect-correct to the container so circles
  * stay round. Pointer handling branches on the active tool: with `select`, a
- * left-drag on the background pans; with a draw tool, left-button events feed
+ * left-drag on the background pans, while a left press that barely moves
+ * (< `CLICK_SLOP_PX`) is a click that hit-tests entities and (re)sets the
+ * selection — a miss clears it. With a draw tool, left-button events feed
  * `useDrawTool` (entity creation) and panning moves to the middle mouse button.
- * Wheel zooms toward the cursor for every tool. The in-progress ghost from the
- * editor store renders dashed in the accent color over the committed entities.
+ * Wheel zooms toward the cursor for every tool. Selected entities render in the
+ * highlight color and Delete/Backspace removes them (skipped while a form field
+ * is focused). The in-progress ghost from the editor store renders dashed in the
+ * accent color over the committed entities.
  */
 export const DrawingCanvas = () => {
     const drawing = useDrawing()
@@ -79,6 +94,8 @@ export const DrawingCanvas = () => {
     const activePlane = useActivePlane()
     const activeTool = useActiveTool()
     const preview = usePreview()
+    const selection = useSelection()
+    const selectedIds = new Set(selection)
 
     const svgRef = useRef<SVGSVGElement>(null)
 
@@ -126,6 +143,11 @@ export const DrawingCanvas = () => {
     // stable identity (and not go stale) across the re-renders setPreview triggers.
     const viewBoxRef = useRef(viewBox)
     viewBoxRef.current = viewBox
+
+    // The Delete handler binds once but must act on the *current* selection, so
+    // mirror it into a ref rather than re-subscribing the listener every change.
+    const selectionRef = useRef(selection)
+    selectionRef.current = selection
 
     // Map a pointer event to a point in viewBox (flipped-SVG) space.
     const eventToBox = useCallback((event: { clientX: number; clientY: number }): Vec2 => {
@@ -182,14 +204,20 @@ export const DrawingCanvas = () => {
     // A drag pans the viewBox. We track the last pointer position in box space and
     // translate by the delta. Which button starts a pan depends on the tool: with
     // `select` it's the left button; with a draw tool the left button draws, so
-    // panning moves to the middle button (button 1).
-    const panRef = useRef<{ pointerId: number; last: Vec2 } | null>(null)
+    // panning moves to the middle button (button 1). `downScreen` is the press
+    // point in raw screen px, kept so pointerup can tell a click from a pan by how
+    // far the pointer travelled.
+    const panRef = useRef<{ pointerId: number; last: Vec2; downScreen: Vec2 } | null>(null)
     const panButton = activeTool === "select" ? 0 : 1
 
     const handlePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
         if (event.button === panButton) {
             event.currentTarget.setPointerCapture(event.pointerId)
-            panRef.current = { pointerId: event.pointerId, last: eventToBox(event) }
+            panRef.current = {
+                pointerId: event.pointerId,
+                last: eventToBox(event),
+                downScreen: [event.clientX, event.clientY]
+            }
             return
         }
         // Left button with a draw tool active: hand off to the draw machine.
@@ -221,6 +249,26 @@ export const DrawingCanvas = () => {
         if (pan && pan.pointerId === event.pointerId) {
             event.currentTarget.releasePointerCapture(event.pointerId)
             panRef.current = null
+            // With the select tool, a press that barely moved is a CLICK, not a
+            // pan: hit-test under the pointer and (re)set the selection — a miss
+            // clears it. A real drag (moved more) panned, so leave selection be.
+            if (activeTool === "select") {
+                const dx = event.clientX - pan.downScreen[0]
+                const dy = event.clientY - pan.downScreen[1]
+                if (Math.hypot(dx, dy) < CLICK_SLOP_PX) {
+                    const svg = svgRef.current
+                    const vb = viewBoxRef.current
+                    // ~PICK_RADIUS_PX in world units: viewBox spans the full pixel
+                    // width, so one screen px is vb.w / clientWidth world units.
+                    const tol = svg ? (PICK_RADIUS_PX * vb.w) / svg.clientWidth : 0
+                    const id = hitTest(drawing.entities, eventToWorld2D(event), activePlane, tol)
+                    if (id) {
+                        setSelection([id])
+                    } else {
+                        clearSelection()
+                    }
+                }
+            }
             return
         }
         if (activeTool !== "select") {
@@ -246,6 +294,25 @@ export const DrawingCanvas = () => {
         setSnapPoint(null)
     }, [activeTool])
 
+    // Delete/Backspace removes the current selection in one undoable step. Bound
+    // once on the document (canvas SVGs don't focus to receive keydown). GUARD:
+    // bail when a form field is focused so deleting in the grid mm input — or any
+    // future text entry — edits text instead of nuking entities.
+    useEffect(() => {
+        const onKeyDown = (event: KeyboardEvent) => {
+            if (event.key !== "Delete" && event.key !== "Backspace") return
+            const tag = document.activeElement?.tagName
+            if (tag === "INPUT" || tag === "TEXTAREA") return
+            const ids = selectionRef.current
+            if (ids.length === 0) return
+            event.preventDefault()
+            removeEntities(ids)
+            clearSelection()
+        }
+        document.addEventListener("keydown", onKeyDown)
+        return () => document.removeEventListener("keydown", onKeyDown)
+    }, [])
+
     // The visible world-space rect (inside the flip group); the grid and axes cover
     // THIS so they fill the window for any pan/zoom, not just the centred view.
     const world = worldRect(viewBox)
@@ -270,7 +337,12 @@ export const DrawingCanvas = () => {
                 <Grid rect={world} gridSize={gridSize} dense={viewBox.w / gridSize > MAX_GRID_LINES_ACROSS} />
                 <Axes rect={world} />
                 {drawing.entities.map((entity) => (
-                    <EntityShape key={entity.id} entity={entity} plane={activePlane} />
+                    <EntityShape
+                        key={entity.id}
+                        entity={entity}
+                        plane={activePlane}
+                        selected={selectedIds.has(entity.id)}
+                    />
                 ))}
                 {preview && <EntityShape entity={preview} plane={activePlane} preview />}
                 {snapPoint && <SnapMarker point={snapPoint} span={viewBox.w} />}
@@ -283,20 +355,37 @@ export const DrawingCanvas = () => {
 /**
  * One flattened entity as a constant-weight polyline (open) or polygon (closed).
  * The in-progress ghost (`preview`) reuses the same flattening but renders dashed
- * in the accent color so it reads as live and not-yet-committed.
+ * in the accent color so it reads as live and not-yet-committed. A `selected`
+ * entity renders heavier in the highlight color — a third hue distinct from the
+ * entity ink and the preview accent.
  */
-const EntityShape = ({ entity, plane, preview = false }: { entity: Entity; plane: Plane; preview?: boolean }) => {
+const EntityShape = ({
+    entity,
+    plane,
+    preview = false,
+    selected = false
+}: {
+    entity: Entity
+    plane: Plane
+    preview?: boolean
+    selected?: boolean
+}) => {
     const { points, closed } = flattenEntity(entity, plane)
     if (points.length < 2) {
         return null
     }
     const pointsAttr = points.map(([x, y]) => `${x},${y}`).join(" ")
+    const className = preview
+        ? "stroke-drawing-preview stroke-2"
+        : selected
+          ? "stroke-drawing-selected stroke-emphasis"
+          : "stroke-drawing-entity stroke-2"
     const shared = {
         points: pointsAttr,
         fill: "none",
         vectorEffect: "non-scaling-stroke" as const,
         strokeDasharray: preview ? "6 4" : undefined,
-        className: preview ? "stroke-drawing-preview stroke-2" : "stroke-drawing-entity stroke-2"
+        className
     }
     return closed ? <polygon {...shared} /> : <polyline {...shared} />
 }
