@@ -4,7 +4,7 @@ import { Sidebar, TopBar } from "./components"
 import { cn } from "./design/cn"
 import { initManifold } from "./lib/manifold"
 import { meshToBufferGeometry } from "./lib/model"
-import { getManifold, setManifold } from "./lib/modelStore"
+import { getManifold, setManifold, useModelVersion } from "./lib/modelStore"
 import { exportStl, parseStl, verifyStlDimensions } from "./lib/stl"
 import { AssistantPanel, SettingsView } from "./modules/assistant"
 import { DrawingEditor, drawingToManifold, useDrawing } from "./modules/drawing"
@@ -26,6 +26,11 @@ export const App = () => {
     // Viewport so the Segment surface can borrow it. App OWNS this geometry's
     // lifecycle; segment code reads it without disposing it.
     const [importedGeometry, setImportedGeometry] = useState<THREE.BufferGeometry | null>(null)
+    // When segmenting WITHOUT an imported STL, the source is the live
+    // drawing-generated widget (modelStore) baked to a BufferGeometry. App owns
+    // and disposes it; segment code borrows it read-only like `importedGeometry`.
+    const [widgetGeometry, setWidgetGeometry] = useState<THREE.BufferGeometry | null>(null)
+    const modelVersion = useModelVersion()
     const drawing = useDrawing()
 
     // The 3D solid is a DERIVED view of the drawing: re-detect the drawing's
@@ -97,6 +102,32 @@ export const App = () => {
         }
     }, [stlFile])
 
+    // Bake the live widget into a BufferGeometry to feed the Segment surface when
+    // nothing was imported. Only while the Segment panel is open and there's no
+    // imported STL; re-baked on model change. The effect cleanup disposes the
+    // geometry it created (on change + unmount); the borrowed Manifold is left to
+    // modelStore.
+    useEffect(() => {
+        if (activePanel !== "segment" || importedGeometry) {
+            setWidgetGeometry(null)
+            return
+        }
+        const m = getManifold()
+        if (!m) {
+            setWidgetGeometry(null)
+            return
+        }
+        const geometry = meshToBufferGeometry(m.getMesh())
+        setWidgetGeometry(geometry)
+        return () => {
+            geometry.dispose()
+        }
+    }, [activePanel, importedGeometry, modelVersion])
+
+    // The geometry the Segment panel + viewport read: the imported STL if present,
+    // else the baked live widget.
+    const segmentSource = importedGeometry ?? widgetGeometry
+
     const handleExport = () => {
         const m = getManifold()
         if (!m) {
@@ -138,17 +169,13 @@ export const App = () => {
                 mesh; the build effect just swaps its geometry on re-entry. */}
             <main className={cn("min-h-0 flex-1", view === "editor" ? "flex" : "hidden")}>
                 <Sidebar activePanel={activePanel} onSelect={setActivePanel} onExport={handleExport} />
-                {activePanel === "segment" ? (
-                    <SegmentViewport geometry={importedGeometry} />
-                ) : (
-                    <Viewport file={stlFile} />
-                )}
+                {activePanel === "segment" ? <SegmentViewport geometry={segmentSource} /> : <Viewport file={stlFile} />}
                 <MeshToolsPanel open={activePanel === "mesh"} onClose={() => setActivePanel(null)} />
                 <ObfuscatePanel open={activePanel === "obfuscate"} onClose={() => setActivePanel(null)} />
                 <SegmentPanel
                     open={activePanel === "segment"}
                     onClose={() => setActivePanel(null)}
-                    geometry={importedGeometry}
+                    geometry={segmentSource}
                 />
                 <AssistantPanel open={activePanel === "ai"} onClose={() => setActivePanel(null)} />
             </main>

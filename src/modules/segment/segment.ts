@@ -1,6 +1,10 @@
+import { claimsFace, type FaceCandidate, faceVotes, resolveConflict, smoothBoundaries } from "./assign"
+import { connectedComponents } from "./connected"
 import { decomposeBodies } from "./decompose"
 import { weldAndAnalyze } from "./mesh"
+import { detectPrimitives } from "./ransac"
 import { growRegions } from "./regionGrow"
+import { sampleCloud } from "./sample"
 import type { MeshTopology, Segmentation, SegmentInput, ShapeGroup, ShapeKind, ShapeParams } from "./types"
 
 /**
@@ -23,13 +27,14 @@ import type { MeshTopology, Segmentation, SegmentInput, ShapeGroup, ShapeKind, S
  * M0 LIVE PATH — all tier flags default off, so no tier claims any face and every
  * face falls through to a single `"unknown"` group covering `[0, F)`.
  *
- * BODY→PATCH HIERARCHY (M2.3) — the body/feature hierarchy rides on `parentId`,
- * NOT on separate container groups, so `assertComplete` stays an honest leaf
- * partition. With `tiers.regions` ON, bodies are NOT emitted as groups: each
- * `decomposeBodies` component mints one id (`faceToBody`) used only as a `parentId`
- * target, and the emitted leaves are the `patch` groups (parented to their body)
- * plus the `unknown` bucket. With `tiers.regions` OFF (M1), bodies remain leaf
- * groups exactly as before (parentId null) — that path is byte-unchanged.
+ * BODY→FEATURE HIERARCHY (M2.3/M3.4) — the body/feature hierarchy rides on
+ * `parentId`, NOT on separate container groups, so `assertComplete` stays an
+ * honest leaf partition. With `tiers.regions` ON, bodies are NOT emitted as
+ * groups: each `decomposeBodies` component mints one id (`faceToBody`) used only
+ * as a `parentId` target, and the emitted leaves are the primitive groups
+ * (`plane`/`cylinder`/`sphere`/`cone`, M3.4) plus the `patch` groups plus the
+ * `unknown` bucket — all parented to their body. With `tiers.regions` OFF (M1),
+ * bodies remain leaf groups exactly as before (parentId null) — byte-unchanged.
  */
 export const segment = (input: SegmentInput): Segmentation => {
     // 1. Weld once. `topo.triangles` is the canonical welded face space; F is its
@@ -71,6 +76,12 @@ export const segment = (input: SegmentInput): Segmentation => {
     // hierarchy onto patches/unknown via `parentId`. Stays all-null otherwise.
     const faceToBody: (string | null)[] = new Array(F).fill(null)
 
+    // Per-kind running label counters for the primitive seam (so groups read
+    // `Plane 1`, `Plane 2`, … `Cylinder 1`, independent per kind). One detected
+    // plane can mint several groups (the §6.5a CC-split), so this advances per
+    // emitted component, not per detected shape.
+    const primitiveCounts: Record<PrimitiveKind, number> = { plane: 0, cylinder: 0, sphere: 0, cone: 0 }
+
     // ── Tier 1: bodies ─────────────────────────────────────────────────────────
     // Wired now (M1.1 implements `decomposeBodies` for real; the hook flips this
     // flag on). M0 tests leave it off, so the stub is never invoked here.
@@ -107,13 +118,95 @@ export const segment = (input: SegmentInput): Segmentation => {
     }
 
     // ── Tier 3: primitives ───────────────────────────────────────────────────────
-    // M3.4 enables: RANSAC first per §6.6 ordering (detect primitives over the
-    // sampled cloud → votes/conflict-resolution → CC-split → boundary cleanup),
-    // claiming each fitted plane/cylinder/sphere/cone group out of the -1 faces.
-    // Sits BEFORE regions because §6.6 runs RANSAC first. Do NOT reference
-    // ransac/fit yet — they do not exist.
+    // RANSAC-first per the §6.6 pipeline order: sample the welded mesh into an
+    // oriented cloud, detect parametric primitives over it, project each shape's
+    // point inliers into per-FACE votes, resolve faces claimed by more than one
+    // shape, run the §6.5a coplanar connected-components split, clean up the
+    // boundary, then claim each surviving (shape, component) as a group. Sits
+    // BEFORE regions because §6.6 runs primitives first; whatever no shape claims
+    // is left `-1` for the region seam below to mop up.
     if (input.tiers.primitives) {
-        // M3.4 seam — intentionally empty until Tier 3 lands.
+        // 1. Oriented cloud over the welded faces. `pointToTri` backmaps every
+        //    sample point to its source face (always in `[0, F)`).
+        const cloud = sampleCloud(topo, input.params)
+
+        // 2. RANSAC. `epsilon` rides in params as a FRACTION of the bbox diagonal
+        //    `D` (spec §7); the detector consumes it as an ABSOLUTE distance, so
+        //    scale it by `D` here. Every other knob (`cosNormal`, `minPoints`,
+        //    `probability`, `enabled`, `seed`) passes straight through.
+        const { detected } = detectPrimitives(cloud, { ...input.params, epsilon: input.params.epsilon * topo.D })
+
+        if (detected.length > 0) {
+            const pointCount = cloud.pointToTri.length
+
+            // 3. Per-shape per-face inlier fraction. For each detected shape build a
+            //    point-inlier mask, then `faceVotes` tallies the share of each
+            //    face's sample points that fell inside it (§6.5c-i). A face is a
+            //    CANDIDATE for shape `si` only when a strict majority of its points
+            //    are inliers (`claimsFace`).
+            const fractions: Float32Array[] = detected.map((shape) => {
+                const mask = new Uint8Array(pointCount)
+                for (const pi of shape.inliers) mask[pi] = 1
+                return faceVotes(cloud.pointToTri, mask, F)
+            })
+
+            // 4. Conflict resolution (§6.6.2). Gather every shape that claims a face
+            //    into `FaceCandidate`s — `fraction` is the primary key, `residual`
+            //    is the shape's `fitRms` tiebreak, `shapeIndex` the final
+            //    earlier/larger tiebreak — and resolve to a single winner. A face no
+            //    shape claims a majority of stays `-1` (→ regions / unknown).
+            const primLabelsRaw = new Int32Array(F).fill(-1)
+            const candidates: FaceCandidate[] = []
+            for (let f = 0; f < F; f++) {
+                candidates.length = 0
+                for (let si = 0; si < detected.length; si++) {
+                    const fraction = fractions[si][f]
+                    if (claimsFace(fraction)) {
+                        candidates.push({ shapeIndex: si, fraction, residual: detected[si].fitRms })
+                    }
+                }
+                if (candidates.length > 0) primLabelsRaw[f] = resolveConflict(candidates)
+            }
+
+            // 5. Boundary cleanup (§6.5c-ii): one-ring majority smoothing that only
+            //    MOVES labels and never crosses a crease, so it can neither create
+            //    nor lose a primitive — completeness is unaffected.
+            const primLabels = smoothBoundaries(primLabelsRaw, topo, { thetaCrease: input.params.thetaCrease })
+
+            // 6. Emit groups. For each detected shape, gather the faces it finally
+            //    owns and CC-SPLIT them over mesh adjacency (§6.5a) so an infinite
+            //    plane that swallowed two disjoint coplanar regions becomes one
+            //    group per connected component (all sharing the same params).
+            //    Cylinder/sphere/cone CC-split too — harmless when they are one
+            //    connected surface, and it keeps any stray disconnected speck its
+            //    own group rather than a non-contiguous membership set. Faces
+            //    already claimed by an earlier shape are skipped inside `claim`, so
+            //    a face the smoother nudged onto an adjacent shape's label is never
+            //    double-counted.
+            for (let si = 0; si < detected.length; si++) {
+                const shape = detected[si]
+                const faces: number[] = []
+                for (let f = 0; f < F; f++) {
+                    if (primLabels[f] === si && assignment[f] === -1) faces.push(f)
+                }
+                if (faces.length === 0) continue
+
+                const label = PRIMITIVE_LABEL[shape.params.kind]
+                let counter = primitiveCounts[shape.params.kind]
+                for (const component of connectedComponents(faces, topo)) {
+                    if (component.length === 0) continue
+                    counter++
+                    claim(
+                        component,
+                        shape.params.kind,
+                        `${label} ${counter}`,
+                        shape.params,
+                        faceToBody[component[0]] ?? null
+                    )
+                }
+                primitiveCounts[shape.params.kind] = counter
+            }
+        }
     }
 
     // ── Tier 2: regions ──────────────────────────────────────────────────────────
@@ -153,6 +246,19 @@ export const segment = (input: SegmentInput): Segmentation => {
 // Placeholder highlight colour; real distinct hues are assigned in M1.2
 // (`groupColors.ts`). Kept neutral so an un-recoloured group is still visible.
 const PLACEHOLDER_COLOR: [number, number, number] = [0.5, 0.5, 0.5]
+
+// The four parametric kinds RANSAC can emit (a `ShapeKind` minus patch/body/
+// unknown). Used to key the per-kind label counters and the display labels.
+type PrimitiveKind = "plane" | "cylinder" | "sphere" | "cone"
+
+// Human-readable label stem per primitive kind; the seam appends a 1-based
+// per-kind index (`Plane 1`, `Cylinder 1`, …).
+const PRIMITIVE_LABEL: Record<PrimitiveKind, string> = {
+    plane: "Plane",
+    cylinder: "Cylinder",
+    sphere: "Sphere",
+    cone: "Cone"
+}
 
 /**
  * Assemble a `ShapeGroup` from a list of welded face indices: a stable id, the

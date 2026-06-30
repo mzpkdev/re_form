@@ -1,14 +1,16 @@
 import { parseColor } from "@ark-ui/react/color-picker"
-import { Boxes, Download, Loader2, Scissors, Trash2, X } from "lucide-react"
+import { Boxes, Check, Download, Loader2, Scissors, Trash2, X } from "lucide-react"
+import { useEffect, useRef, useState } from "react"
 import { Virtuoso } from "react-virtuoso"
 import type * as THREE from "three"
-import { ColorPicker, cn } from "../../design"
+import { Checkbox, ColorPicker, cn, NumberInput, Slider } from "../../design"
 import { downloadStl, exportGroups } from "./groupExport"
 import { groupByParent, type PanelEntry, toggleSelection } from "./groupHierarchy"
 import { setGroups, useGroups } from "./groupsStore"
+import { type ControlValues, paramsToControls, setControl, setEnabled } from "./paramControls"
 import { setSelection, useSelection } from "./selectionStore"
-import type { ShapeGroup } from "./types"
-import { useSegmentation } from "./useSegmentation"
+import type { SegmentationParams, ShapeGroup, ShapeKind } from "./types"
+import { defaultParams, useSegmentation } from "./useSegmentation"
 
 /** A group's `[r, g, b]` (0–1 floats) as a CSS `rgb(...)` string for the swatch. */
 const rgbCss = ([r, g, b]: [number, number, number]): string =>
@@ -41,6 +43,24 @@ export const recolorGroup = (groups: ShapeGroup[], id: string, color: [number, n
 /** Replace one group's `label`, same fresh-object discipline as {@link recolorGroup}. */
 export const renameGroup = (groups: ShapeGroup[], id: string, label: string): ShapeGroup[] =>
     groups.map((group) => (group.id === id ? { ...group, label } : group))
+
+/** Short, lowercase tag for a group's primitive kind, shown as a small badge on its row. */
+const KIND_LABEL: Record<ShapeKind, string> = {
+    plane: "plane",
+    cylinder: "cyl",
+    sphere: "sphere",
+    cone: "cone",
+    patch: "patch",
+    body: "body",
+    unknown: "?"
+}
+
+/** A tiny monochrome badge surfacing a group's fitted primitive `kind` (M3.7, light touch). */
+const KindBadge = ({ kind }: { kind: ShapeKind }) => (
+    <span className="shrink-0 rounded-control bg-surface-variant px-1.5 py-0.5 font-mono text-tiny text-on-surface-variant">
+        {KIND_LABEL[kind]}
+    </span>
+)
 
 const Row = ({
     group,
@@ -115,6 +135,8 @@ const Row = ({
                 onClick={(event) => event.stopPropagation()}
                 className="min-w-0 flex-1 rounded-none border-0 border-b border-transparent bg-transparent px-1 py-0.5 font-sans text-body-sm text-on-surface focus:border-primary focus:outline-none"
             />
+
+            <KindBadge kind={group.kind} />
 
             <button
                 type="button"
@@ -199,6 +221,218 @@ const BodyHeader = ({
     )
 }
 
+/** A single labelled slider bound to one numeric control value, with a live read-out. */
+const ControlSlider = ({
+    label,
+    value,
+    min,
+    max,
+    step,
+    format,
+    disabled,
+    onChange
+}: {
+    label: string
+    value: number
+    min: number
+    max: number
+    step: number
+    format: (value: number) => string
+    disabled: boolean
+    onChange: (value: number) => void
+}) => (
+    <Slider.Root
+        value={[value]}
+        min={min}
+        max={max}
+        step={step}
+        disabled={disabled}
+        // Ark hands back an array (one entry per thumb); this slider has a single thumb.
+        onValueChange={(details) => onChange(details.value[0] ?? value)}
+    >
+        <div className="flex items-baseline justify-between">
+            <Slider.Label className="font-sans text-body-sm text-on-surface">{label}</Slider.Label>
+            <span className="font-mono text-tiny text-tertiary tabular-nums">{format(value)}</span>
+        </div>
+        <Slider.Control>
+            <Slider.Track>
+                <Slider.Range />
+            </Slider.Track>
+            <Slider.Thumb index={0}>
+                <Slider.HiddenInput />
+            </Slider.Thumb>
+        </Slider.Control>
+    </Slider.Root>
+)
+
+/** A primitive-type toggle: which kinds RANSAC tries (`params.enabled.*`). */
+const PrimitiveToggle = ({
+    label,
+    checked,
+    disabled,
+    onChange
+}: {
+    label: string
+    checked: boolean
+    disabled: boolean
+    onChange: (on: boolean) => void
+}) => (
+    <Checkbox.Root
+        checked={checked}
+        disabled={disabled}
+        onCheckedChange={(details) => onChange(details.checked === true)}
+    >
+        <Checkbox.Control>
+            <Checkbox.Indicator>
+                <Check className="size-3.5 text-on-primary" />
+            </Checkbox.Indicator>
+        </Checkbox.Control>
+        <Checkbox.Label className="font-sans text-body-sm text-on-surface">{label}</Checkbox.Label>
+        <Checkbox.HiddenInput />
+    </Checkbox.Root>
+)
+
+/**
+ * The tuning section (M3.7): primary detail/angle/min-feature sliders, the
+ * primitive-type checkboxes, and an Advanced collapsible (probability + the
+ * crease/grow dihedral angles). All edits flow through {@link setControl} /
+ * {@link setEnabled}, which convert at the UI boundary (deg↔rad, angle↔cos) and
+ * return FRESH params so the panel's debounced re-run effect re-fires. Controls
+ * are disabled while a run is in flight.
+ */
+const TuningSection = ({
+    params,
+    controls,
+    disabled,
+    onParamsChange
+}: {
+    params: SegmentationParams
+    controls: ControlValues
+    disabled: boolean
+    onParamsChange: (next: SegmentationParams) => void
+}) => {
+    const set = <K extends keyof ControlValues>(key: K, value: number) => onParamsChange(setControl(params, key, value))
+    const toggle = (kind: keyof SegmentationParams["enabled"], on: boolean) =>
+        onParamsChange(setEnabled(params, kind, on))
+
+    return (
+        <div className="flex flex-col gap-4 border-b border-on-surface/10 pb-4">
+            <ControlSlider
+                label="Detail / tolerance"
+                value={controls.epsilon}
+                min={0.001}
+                max={0.02}
+                step={0.001}
+                format={(v) => v.toFixed(3)}
+                disabled={disabled}
+                onChange={(v) => set("epsilon", v)}
+            />
+            <ControlSlider
+                label="Angle tolerance"
+                value={controls.angleDeg}
+                min={5}
+                max={45}
+                step={1}
+                format={(v) => `${Math.round(v)}°`}
+                disabled={disabled}
+                onChange={(v) => set("angleDeg", v)}
+            />
+
+            <div className="flex flex-col gap-1.5">
+                <span className="font-sans text-body-sm text-on-surface">Min feature size</span>
+                <NumberInput.Root
+                    value={String(controls.minPoints)}
+                    min={4}
+                    max={2000}
+                    step={10}
+                    disabled={disabled}
+                    onValueChange={(details) => set("minPoints", details.valueAsNumber)}
+                >
+                    <NumberInput.Control>
+                        <NumberInput.Input />
+                        <NumberInput.DecrementTrigger>−</NumberInput.DecrementTrigger>
+                        <NumberInput.IncrementTrigger>+</NumberInput.IncrementTrigger>
+                    </NumberInput.Control>
+                </NumberInput.Root>
+            </div>
+
+            <div className="flex flex-col gap-2">
+                <span className="font-mono text-label-caps text-tertiary">Primitive types</span>
+                <div className="grid grid-cols-2 gap-2">
+                    <PrimitiveToggle
+                        label="Plane"
+                        checked={params.enabled.plane}
+                        disabled={disabled}
+                        onChange={(on) => toggle("plane", on)}
+                    />
+                    <PrimitiveToggle
+                        label="Cylinder"
+                        checked={params.enabled.cylinder}
+                        disabled={disabled}
+                        onChange={(on) => toggle("cylinder", on)}
+                    />
+                    <PrimitiveToggle
+                        label="Sphere"
+                        checked={params.enabled.sphere}
+                        disabled={disabled}
+                        onChange={(on) => toggle("sphere", on)}
+                    />
+                    <PrimitiveToggle
+                        label="Cone"
+                        checked={params.enabled.cone}
+                        disabled={disabled}
+                        onChange={(on) => toggle("cone", on)}
+                    />
+                </div>
+            </div>
+
+            <details className="group">
+                <summary className="cursor-pointer list-none font-mono text-label-caps text-tertiary transition-colors hover:text-on-surface">
+                    Advanced
+                </summary>
+                <div className="flex flex-col gap-4 pt-4">
+                    <ControlSlider
+                        label="RANSAC thoroughness"
+                        value={controls.probability}
+                        min={0.005}
+                        max={0.1}
+                        step={0.005}
+                        format={(v) => v.toFixed(3)}
+                        disabled={disabled}
+                        onChange={(v) => set("probability", v)}
+                    />
+                    <ControlSlider
+                        label="Crease angle"
+                        value={controls.thetaCreaseDeg}
+                        min={10}
+                        max={80}
+                        step={1}
+                        format={(v) => `${Math.round(v)}°`}
+                        disabled={disabled}
+                        onChange={(v) => set("thetaCreaseDeg", v)}
+                    />
+                    <ControlSlider
+                        label="Grow angle"
+                        value={controls.thetaGrowDeg}
+                        min={5}
+                        max={60}
+                        step={1}
+                        format={(v) => `${Math.round(v)}°`}
+                        disabled={disabled}
+                        onChange={(v) => set("thetaGrowDeg", v)}
+                    />
+                    <p className="font-sans text-tiny text-tertiary">
+                        Grow angle is held below the crease angle (the region-grow hysteresis window).
+                    </p>
+                </div>
+            </details>
+        </div>
+    )
+}
+
+/** Debounce delay (ms) between a slider edit settling and the re-run firing. */
+const RERUN_DEBOUNCE_MS = 300
+
 export const SegmentPanel = ({
     open,
     onClose,
@@ -208,12 +442,87 @@ export const SegmentPanel = ({
     onClose: () => void
     geometry: THREE.BufferGeometry | null
 }) => {
-    const { run, isPending, error } = useSegmentation(geometry)
+    // Local tuning state, seeded from the §7 defaults. Passing it into
+    // `useSegmentation(geometry, params)` refreshes the mutationFn's closure every
+    // render, so `run()` always segments with the CURRENT slider params — no stale
+    // arg, no separate `run(params)` path needed.
+    const [params, setParams] = useState<SegmentationParams>(defaultParams)
+    const { run, isPending, error } = useSegmentation(geometry, params)
     const groups = useGroups()
     const selection = useSelection()
     const selected = new Set(selection)
     const hasGroups = groups.length > 0
     const entries = groupByParent(groups)
+    const controls = paramsToControls(params)
+
+    // ── Debounced, SERIALIZED re-run on param edits ──────────────────────────
+    // The worker is async and overlapping runs can cross-resolve (M3.5), so we
+    // never fire while one is in flight. A slider edit (1) marks params dirty and
+    // (2) arms a debounce timer; the timer attempts a run. Each run attempt fires
+    // ONLY when `!isPending` and an initial segmentation already exists, then
+    // clears dirty. A separate effect watches `isPending` falling back to false
+    // and re-fires if params changed again mid-flight — so the worker always ends
+    // on the LATEST params, one run at a time.
+    const dirtyRef = useRef(false)
+    const hasSegmentedRef = useRef(false)
+    const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+    const pendingRef = useRef(isPending)
+    pendingRef.current = isPending
+
+    // "Request a run" lives in a ref (not a useCallback) so the effects never close
+    // over it as a reactive value — `params` and `isPending` stay the honest
+    // triggers. The ref body is refreshed every render, so it always calls the
+    // CURRENT `run` (i.e. the latest slider params) and clears the dirty flag.
+    const requestRunRef = useRef<() => void>(() => {})
+    requestRunRef.current = () => {
+        hasSegmentedRef.current = true
+        dirtyRef.current = false
+        run()
+    }
+
+    // Arm the debounce on every param change. Fires a run when it elapses, but only
+    // if we've segmented before and nothing is in flight; otherwise it stays dirty
+    // and the isPending-settle effect picks it up. Slider edits drive re-runs only
+    // AFTER the user has segmented once (never auto-run on an untouched geometry).
+    // biome-ignore lint/correctness/useExhaustiveDependencies: `params` is the intended TRIGGER (re-arm the debounce whenever it changes); the body reads run/isPending live through refs, by design, to keep re-runs serialized.
+    useEffect(() => {
+        if (!hasSegmentedRef.current) {
+            return
+        }
+        dirtyRef.current = true
+        if (timerRef.current) {
+            clearTimeout(timerRef.current)
+        }
+        timerRef.current = setTimeout(() => {
+            timerRef.current = null
+            if (dirtyRef.current && !pendingRef.current) {
+                requestRunRef.current()
+            }
+        }, RERUN_DEBOUNCE_MS)
+        return () => {
+            if (timerRef.current) {
+                clearTimeout(timerRef.current)
+                timerRef.current = null
+            }
+        }
+    }, [params])
+
+    // When a run settles (`isPending` → false) and params changed again while it
+    // was in flight, re-fire immediately with the latest params. This is the
+    // serialization gate: at most one run at a time, always ending on the newest.
+    useEffect(() => {
+        if (!isPending && dirtyRef.current && hasSegmentedRef.current) {
+            requestRunRef.current()
+        }
+    }, [isPending])
+
+    // The explicit Segment button: marks "segmented once" so subsequent slider
+    // edits start driving debounced re-runs, then fires immediately.
+    const handleSegment = () => {
+        hasSegmentedRef.current = true
+        dirtyRef.current = false
+        run()
+    }
 
     // Edits always produce FRESH group objects (the store's delete-on-replace keys
     // on identity); reading `groups`/`selection` from this render is correct because
@@ -268,15 +577,22 @@ export const SegmentPanel = ({
                 </div>
 
                 {geometry ? (
-                    <div className="flex min-h-0 flex-1 flex-col gap-4 p-6">
+                    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-6">
                         <p className="font-sans text-body-sm text-tertiary">
                             Split the imported model into selectable groups. Click a group to isolate it; shift- or
                             ⌘-click to multi-select. Rename, recolor, or export any group on its own.
                         </p>
 
+                        <TuningSection
+                            params={params}
+                            controls={controls}
+                            disabled={isPending}
+                            onParamsChange={setParams}
+                        />
+
                         <button
                             type="button"
-                            onClick={run}
+                            onClick={handleSegment}
                             disabled={isPending}
                             className="flex w-full items-center justify-center gap-2 border border-transparent bg-primary py-3 font-mono text-label-caps text-on-primary transition-colors chamfer hover:border-on-surface hover:bg-primary-container hover:text-on-primary-container disabled:cursor-not-allowed disabled:opacity-50"
                         >

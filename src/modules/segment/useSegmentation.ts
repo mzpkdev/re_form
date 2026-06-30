@@ -1,9 +1,9 @@
 import { useMutation } from "@tanstack/react-query"
+import { useEffect, useRef } from "react"
 import type * as THREE from "three"
-import { initManifold } from "../../lib/manifold"
 import { colorForIndex } from "./groupColors"
 import { setGroups } from "./groupsStore"
-import { segment } from "./segment"
+import type { SegmentMessage } from "./segment.worker"
 import type { Segmentation, SegmentationParams, SegmentInput, ShapeGroup } from "./types"
 
 /**
@@ -14,12 +14,14 @@ import type { Segmentation, SegmentationParams, SegmentInput, ShapeGroup } from 
  *
  * RECON CORRECTION — this is a mutation, NOT a `useQuery` async-geometry pattern
  * (there is none in the repo). The public shape `{ segmentation, run, isPending,
- * error }` is the contract; M3.5 swaps the in-line `segment(...)` call for a Web
- * Worker behind it without changing that shape.
+ * error }` is the contract; M3.5 swapped the in-line `segment(...)` call for a Web
+ * Worker behind it WITHOUT changing that shape — `run()` still fires the mutation,
+ * `isPending` still tracks one in flight, `error` still surfaces a thrown failure;
+ * only the work moved off-thread (see the `mutationFn` below).
  *
- * TIER GATING — M2 enables `bodies` + `regions` (bodies become parentId targets,
- * patches are the emitted leaves); `primitives` stays off until M3 widens the
- * flags in `buildSegmentInput`'s call below.
+ * TIER GATING — M3 enables `bodies` + `regions` + `primitives`: bodies become
+ * parentId targets, and the emitted leaves are the fitted primitives plus the
+ * region patches plus the unknown bucket (all carrying `parentId`).
  */
 
 /**
@@ -38,7 +40,7 @@ export const defaultParams: SegmentationParams = {
     seed: 1
 }
 
-/** Which segmentation tiers run. M1 ships bodies only. */
+/** Which segmentation tiers run. M3 ships bodies + regions + primitives. */
 export interface SegmentTiers {
     bodies: boolean
     regions: boolean
@@ -86,10 +88,17 @@ export interface UseSegmentationResult {
 }
 
 /**
- * Segment `geometry` on demand. `run()` boots the manifold singleton, runs the
- * pipeline (bodies + regions in M2), recolours the resulting groups by index, and
- * publishes them to `groupsStore`. The recoloured `Segmentation` is exposed as
- * `segmentation`.
+ * Segment `geometry` on demand. `run()` posts the work to a Web Worker that boots
+ * the manifold singleton and runs the whole pipeline (bodies + regions +
+ * primitives in M3) off the main thread; the recoloured groups come back, get
+ * coloured by index here, and are published to `groupsStore`. The recoloured
+ * `Segmentation` is exposed as `segmentation`.
+ *
+ * WORKER LIFECYCLE — one module worker is created per hook instance (in a ref,
+ * lazily on first `run`) and `terminate()`d on unmount. The `mutationFn` posts a
+ * COPY of the positions and awaits the single reply via a one-shot `onmessage`
+ * handler; `isPending`/`error`/`run` semantics are unchanged from the inline M1
+ * version — only the work crossed the worker boundary.
  */
 export const useSegmentation = (
     geometry: THREE.BufferGeometry | null,
@@ -97,13 +106,58 @@ export const useSegmentation = (
 ): UseSegmentationResult => {
     const merged: SegmentationParams = { ...defaultParams, ...params }
 
+    // The worker is created once and reused across runs; `terminate()` on unmount
+    // is the three.js-style "free what you allocate" for the worker thread.
+    const workerRef = useRef<Worker | null>(null)
+    useEffect(() => {
+        return () => {
+            workerRef.current?.terminate()
+            workerRef.current = null
+        }
+    }, [])
+
     const mutation = useMutation({
         mutationFn: async (): Promise<Segmentation> => {
-            const wasm = await initManifold()
-            // M2: bodies + regions. M3 flips primitives on here. Bodies become
-            // parents (no body group), patches/unknown carry `parentId`.
-            const input = buildSegmentInput(geometry, merged, { bodies: true, regions: true, primitives: false })
-            const seg = segment({ ...input, wasm })
+            // Validate up front (loud null-geometry error, same as inline) so the
+            // worker only ever receives a real buffer. `buildSegmentInput` also
+            // pins the M3 tiers used both here and inside the worker.
+            const input = buildSegmentInput(geometry, merged, { bodies: true, regions: true, primitives: true })
+
+            // COPY the live position attribute into a fresh Float32Array. We must
+            // NOT transfer the rendered geometry's own buffer — `SegmentViewport`
+            // renders this same `importedGeometry`, and a transfer would neuter its
+            // copy and blank the viewport. The copy is what we hand off (and the
+            // worker is free to neuter THAT).
+            const source = input.geometry.getAttribute("position").array
+            const positions = new Float32Array(source)
+
+            if (!workerRef.current) {
+                workerRef.current = new Worker(new URL("./segment.worker.ts", import.meta.url), { type: "module" })
+            }
+            const worker = workerRef.current
+
+            const message: SegmentMessage = { positions: positions.buffer, params: merged, tiers: input.tiers }
+            const seg = await new Promise<Segmentation>((resolve, reject) => {
+                const onMessage = (e: MessageEvent<Segmentation>): void => {
+                    cleanup()
+                    resolve(e.data)
+                }
+                const onError = (e: ErrorEvent): void => {
+                    cleanup()
+                    reject(e.error ?? new Error(e.message || "segment.worker failed"))
+                }
+                const cleanup = (): void => {
+                    worker.removeEventListener("message", onMessage)
+                    worker.removeEventListener("error", onError)
+                }
+                worker.addEventListener("message", onMessage)
+                worker.addEventListener("error", onError)
+                worker.postMessage(message, [positions.buffer])
+            })
+
+            // Recolour on the main thread exactly as the inline version did — the
+            // worker returns placeholder-coloured groups; `applyColors` runs here
+            // on the returned groups (no geometry/manifold work involved).
             return { ...seg, groups: applyColors(seg.groups) }
         },
         onSuccess: (seg) => {

@@ -172,13 +172,25 @@ export const SegmentViewport = ({ geometry }: { geometry: THREE.BufferGeometry |
             }
         }
 
-        // Frame the camera to the combined bounds of the group meshes (falling
-        // back to the source geometry if there are no groups yet). Copies
-        // Viewport's framing maths.
+        // With no groups yet (before "Segment" runs), show the whole source mesh
+        // so the model stays visible. Clone the borrowed geometry so this mesh is
+        // segment-owned and freed by the teardown loop — the borrowed source is
+        // never disposed here. Stored under a sentinel key, so it isn't in
+        // idByObject (not pickable) and groupsRef skips it in the highlight pass.
         if (currentGroups.length === 0) {
-            geometry.computeBoundingBox()
-            if (geometry.boundingBox) {
-                bounds.copy(geometry.boundingBox)
+            const sourceGeometry = geometry.clone()
+            const material = new THREE.MeshStandardMaterial({
+                roughness: 0.55,
+                metalness: 0.1,
+                flatShading: true
+            })
+            material.color.setRGB(0.7, 0.7, 0.72)
+            const mesh = new THREE.Mesh(sourceGeometry, material)
+            scene.add(mesh)
+            meshByIdRef.current.set("__source__", mesh)
+            sourceGeometry.computeBoundingBox()
+            if (sourceGeometry.boundingBox) {
+                bounds.copy(sourceGeometry.boundingBox)
             }
         }
         if (!bounds.isEmpty()) {
