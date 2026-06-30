@@ -5,11 +5,12 @@ import { cn } from "./design/cn"
 import { initManifold } from "./lib/manifold"
 import { meshToBufferGeometry } from "./lib/model"
 import { getManifold, setManifold } from "./lib/modelStore"
-import { exportStl, verifyStlDimensions } from "./lib/stl"
+import { exportStl, parseStl, verifyStlDimensions } from "./lib/stl"
 import { AssistantPanel, SettingsView } from "./modules/assistant"
 import { DrawingEditor, drawingToManifold, useDrawing } from "./modules/drawing"
 import { MeshToolsPanel } from "./modules/mesh-tools"
 import { ObfuscatePanel } from "./modules/obfuscate"
+import { SegmentPanel, SegmentViewport } from "./modules/segment"
 import { Viewport } from "./modules/viewer"
 
 // No naming UI yet; the export plumbing is structured so a part name could be
@@ -19,8 +20,12 @@ const DEFAULT_PART_NAME = "model"
 
 export const App = () => {
     const [view, setView] = useState<"editor" | "settings" | "draw">("editor")
-    const [activePanel, setActivePanel] = useState<"ai" | "mesh" | "obfuscate" | null>(null)
+    const [activePanel, setActivePanel] = useState<"ai" | "mesh" | "obfuscate" | "segment" | null>(null)
     const [stlFile, setStlFile] = useState<File | null>(null)
+    // The imported STL parsed into a BufferGeometry, lifted here from inside the
+    // Viewport so the Segment surface can borrow it. App OWNS this geometry's
+    // lifecycle; segment code reads it without disposing it.
+    const [importedGeometry, setImportedGeometry] = useState<THREE.BufferGeometry | null>(null)
     const drawing = useDrawing()
 
     // The 3D solid is a DERIVED view of the drawing: re-detect the drawing's
@@ -54,6 +59,43 @@ export const App = () => {
             cancelled = true
         }
     }, [view, drawing])
+
+    // Parse the picked STL once into a BufferGeometry the Segment surface borrows
+    // (the Viewport parses its own copy internally; this is the lifted, segment-
+    // facing one). App owns this geometry's lifetime end to end.
+    //
+    // Race/leak safety mirrors the build effect above:
+    //   - `cancelled` drops a stale parse when `stlFile` changes mid-read, so only
+    //     the latest file's geometry is ever committed.
+    //   - The PREVIOUS geometry is disposed on every `stlFile` change and on
+    //     unmount (the functional setState frees `prev` before swapping it in, and
+    //     the cleanup disposes whatever the resolved parse stored).
+    //   - `null` when there's no file, after freeing any geometry left behind.
+    useEffect(() => {
+        if (!stlFile) {
+            setImportedGeometry((prev) => {
+                prev?.dispose()
+                return null
+            })
+            return
+        }
+        let cancelled = false
+        stlFile.arrayBuffer().then((data) => {
+            if (cancelled) return
+            const geometry = parseStl(data)
+            setImportedGeometry((prev) => {
+                prev?.dispose()
+                return geometry
+            })
+        })
+        return () => {
+            cancelled = true
+            setImportedGeometry((prev) => {
+                prev?.dispose()
+                return null
+            })
+        }
+    }, [stlFile])
 
     const handleExport = () => {
         const m = getManifold()
@@ -96,9 +138,18 @@ export const App = () => {
                 mesh; the build effect just swaps its geometry on re-entry. */}
             <main className={cn("min-h-0 flex-1", view === "editor" ? "flex" : "hidden")}>
                 <Sidebar activePanel={activePanel} onSelect={setActivePanel} onExport={handleExport} />
-                <Viewport file={stlFile} />
+                {activePanel === "segment" ? (
+                    <SegmentViewport geometry={importedGeometry} />
+                ) : (
+                    <Viewport file={stlFile} />
+                )}
                 <MeshToolsPanel open={activePanel === "mesh"} onClose={() => setActivePanel(null)} />
                 <ObfuscatePanel open={activePanel === "obfuscate"} onClose={() => setActivePanel(null)} />
+                <SegmentPanel
+                    open={activePanel === "segment"}
+                    onClose={() => setActivePanel(null)}
+                    geometry={importedGeometry}
+                />
                 <AssistantPanel open={activePanel === "ai"} onClose={() => setActivePanel(null)} />
             </main>
             {view === "draw" ? (

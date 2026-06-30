@@ -1,5 +1,6 @@
 export { Checkbox } from "./checkbox"
 export { cn } from "./cn"
+export { ColorPicker } from "./color-picker"
 export { Dialog } from "./dialog"
 export { Field } from "./field"
 export { Tooltip } from "./tooltip"

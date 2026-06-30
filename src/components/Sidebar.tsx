@@ -1,7 +1,7 @@
-import { Bot, SlidersHorizontal, VenetianMask } from "lucide-react"
+import { Bot, Scissors, SlidersHorizontal, VenetianMask } from "lucide-react"
 import { cn } from "../design/cn"
 
-type Panel = "ai" | "mesh" | "obfuscate"
+type Panel = "ai" | "mesh" | "obfuscate" | "segment"
 
 const NavItem = ({
     icon: Icon,
@@ -57,6 +57,12 @@ export const Sidebar = ({
                 label="Obfuscate"
                 active={activePanel === "obfuscate"}
                 onClick={() => onSelect("obfuscate")}
+            />
+            <NavItem
+                icon={Scissors}
+                label="Segment"
+                active={activePanel === "segment"}
+                onClick={() => onSelect("segment")}
             />
         </nav>
         <div className="border-t border-on-surface/10 p-6">
