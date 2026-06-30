@@ -107,6 +107,7 @@ export const App = () => {
     // imported STL; re-baked on model change. The effect cleanup disposes the
     // geometry it created (on change + unmount); the borrowed Manifold is left to
     // modelStore.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: modelVersion re-bakes the source when the live widget changes; the effect reads getManifold() imperatively, so Biome can't see the dependency.
     useEffect(() => {
         if (activePanel !== "segment" || importedGeometry) {
             setWidgetGeometry(null)
