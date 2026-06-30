@@ -1,8 +1,9 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { removeEntities, useDrawing, useGridSize } from "./documentStore"
 import { clearSelection, setSelection, useActivePlane, useActiveTool, usePreview, useSelection } from "./editorStore"
-import { hitTest } from "./hitTest"
+import { entitiesInBox, hitTest } from "./hitTest"
 import { flattenEntity } from "./project"
+import { detectBrokenEntities, detectRegions } from "./regions"
 import { snapToGrid } from "./snap"
 import type { Entity, Plane, Vec2 } from "./types"
 import { useDrawTool } from "./useDrawTool"
@@ -102,6 +103,12 @@ export const DrawingCanvas = () => {
     // The grid intersection under the cursor while a draw tool is active — the
     // "this is where a click lands" marker. Null with `select` or off-canvas.
     const [snapPoint, setSnapPoint] = useState<Vec2 | null>(null)
+    // The cursor point (world-2D, unsnapped) while the eraser is active — drives
+    // the red sponge ring. Null off the eraser tool or off-canvas.
+    const [eraserPoint, setEraserPoint] = useState<Vec2 | null>(null)
+    // The in-progress select marquee (two world-2D corners), or null when not
+    // dragging a selection box. Drives the dashed selection rectangle.
+    const [marquee, setMarquee] = useState<{ start: Vec2; current: Vec2 } | null>(null)
     const [viewBox, setViewBox] = useState<ViewBox>({
         x: -INITIAL_HALF_EXTENT,
         y: -INITIAL_HALF_EXTENT,
@@ -184,6 +191,19 @@ export const DrawingCanvas = () => {
         [activeTool, eventToWorld2D, gridSize]
     )
 
+    // Eraser: remove the entity under the pointer (the sponge). Uses the same
+    // screen-px pick radius as a select-click, converted to world units.
+    // `removeEntities([id])` is the guarded single-step remove — a miss or an
+    // already-gone id is a no-op, so sweeping over empty space never pollutes the
+    // undo history. Each erased entity is its own undo step.
+    const eraseAt = (event: { clientX: number; clientY: number }) => {
+        const svg = svgRef.current
+        const vb = viewBoxRef.current
+        const tol = svg ? (PICK_RADIUS_PX * vb.w) / svg.clientWidth : 0
+        const id = hitTest(drawing.entities, eventToWorld2D(event), activePlane, tol)
+        if (id) removeEntities([id])
+    }
+
     // Zoom toward the cursor: scale the span, then shift the origin so the world
     // point under the pointer stays put.
     const handleWheel = (event: React.WheelEvent<SVGSVGElement>) => {
@@ -202,13 +222,19 @@ export const DrawingCanvas = () => {
     }
 
     // A drag pans the viewBox. We track the last pointer position in box space and
-    // translate by the delta. Which button starts a pan depends on the tool: with
-    // `select` it's the left button; with a draw tool the left button draws, so
-    // panning moves to the middle button (button 1). `downScreen` is the press
-    // point in raw screen px, kept so pointerup can tell a click from a pan by how
-    // far the pointer travelled.
+    // translate by the delta. `downScreen` is the press point in raw screen px,
+    // kept so a select pointerup can tell a click from a marquee by travel.
     const panRef = useRef<{ pointerId: number; last: Vec2; downScreen: Vec2 } | null>(null)
-    const panButton = activeTool === "select" ? 0 : 1
+    // EVERY tool pans with the MIDDLE button, leaving the left button free for the
+    // tool's own action — drawing, erasing, or (for select) click + marquee.
+    const panButton = 1
+    const isEraser = activeTool === "eraser"
+    // Whether a left-button erase sweep is in progress. Capture is set on the SVG
+    // so the sponge keeps removing even as the pointer strays off the element.
+    const erasingRef = useRef(false)
+    // An in-flight select left-drag: its world start, the screen press point (to
+    // tell a click from a marquee), and the captured pointer. Null when idle.
+    const selectDragRef = useRef<{ pointerId: number; startWorld: Vec2; downScreen: Vec2 } | null>(null)
 
     const handlePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
         if (event.button === panButton) {
@@ -220,8 +246,25 @@ export const DrawingCanvas = () => {
             }
             return
         }
+        // Eraser: left press starts a sponge sweep and erases under the pointer.
+        if (isEraser && event.button === 0) {
+            event.currentTarget.setPointerCapture(event.pointerId)
+            erasingRef.current = true
+            eraseAt(event)
+            return
+        }
+        // Select: a left press begins a click-or-marquee gesture (resolved on up).
+        if (activeTool === "select" && event.button === 0) {
+            event.currentTarget.setPointerCapture(event.pointerId)
+            selectDragRef.current = {
+                pointerId: event.pointerId,
+                startWorld: eventToWorld2D(event),
+                downScreen: [event.clientX, event.clientY]
+            }
+            return
+        }
         // Left button with a draw tool active: hand off to the draw machine.
-        if (activeTool !== "select" && event.button === 0) {
+        if (activeTool !== "select" && !isEraser && event.button === 0) {
             draw.onPointerDown(event)
         }
     }
@@ -238,6 +281,22 @@ export const DrawingCanvas = () => {
             pan.last = [cx - dx, cy - dy]
             return
         }
+        // Eraser: track the cursor for the sponge ring; while sweeping, erase.
+        if (isEraser) {
+            setEraserPoint(eventToWorld2D(event))
+            if (erasingRef.current) eraseAt(event)
+            return
+        }
+        // Select drag: once past click-slop, draw the marquee box.
+        const sel = selectDragRef.current
+        if (sel && sel.pointerId === event.pointerId) {
+            const dx = event.clientX - sel.downScreen[0]
+            const dy = event.clientY - sel.downScreen[1]
+            if (Math.hypot(dx, dy) >= CLICK_SLOP_PX) {
+                setMarquee({ start: sel.startWorld, current: eventToWorld2D(event) })
+            }
+            return
+        }
         if (activeTool !== "select") {
             updateSnapPoint(event)
             draw.onPointerMove(event)
@@ -249,26 +308,50 @@ export const DrawingCanvas = () => {
         if (pan && pan.pointerId === event.pointerId) {
             event.currentTarget.releasePointerCapture(event.pointerId)
             panRef.current = null
-            // With the select tool, a press that barely moved is a CLICK, not a
-            // pan: hit-test under the pointer and (re)set the selection — a miss
-            // clears it. A real drag (moved more) panned, so leave selection be.
-            if (activeTool === "select") {
-                const dx = event.clientX - pan.downScreen[0]
-                const dy = event.clientY - pan.downScreen[1]
-                if (Math.hypot(dx, dy) < CLICK_SLOP_PX) {
-                    const svg = svgRef.current
-                    const vb = viewBoxRef.current
-                    // ~PICK_RADIUS_PX in world units: viewBox spans the full pixel
-                    // width, so one screen px is vb.w / clientWidth world units.
-                    const tol = svg ? (PICK_RADIUS_PX * vb.w) / svg.clientWidth : 0
-                    const id = hitTest(drawing.entities, eventToWorld2D(event), activePlane, tol)
-                    if (id) {
-                        setSelection([id])
-                    } else {
-                        clearSelection()
-                    }
-                }
+            return
+        }
+        // Eraser: end the sweep and release capture.
+        if (isEraser) {
+            if (erasingRef.current) {
+                erasingRef.current = false
+                event.currentTarget.releasePointerCapture(event.pointerId)
             }
+            return
+        }
+        // Select up: a press that barely moved is a CLICK (single pick under the
+        // pointer — a miss clears); a real drag is a MARQUEE that selects every
+        // entity it crosses. Either way the selection becomes DEL-deletable.
+        const sel = selectDragRef.current
+        if (sel && sel.pointerId === event.pointerId) {
+            event.currentTarget.releasePointerCapture(event.pointerId)
+            selectDragRef.current = null
+            const dx = event.clientX - sel.downScreen[0]
+            const dy = event.clientY - sel.downScreen[1]
+            if (Math.hypot(dx, dy) < CLICK_SLOP_PX) {
+                const svg = svgRef.current
+                const vb = viewBoxRef.current
+                // ~PICK_RADIUS_PX in world units: viewBox spans the full pixel
+                // width, so one screen px is vb.w / clientWidth world units.
+                const tol = svg ? (PICK_RADIUS_PX * vb.w) / svg.clientWidth : 0
+                const id = hitTest(drawing.entities, eventToWorld2D(event), activePlane, tol)
+                if (id) {
+                    setSelection([id])
+                } else {
+                    clearSelection()
+                }
+            } else {
+                const [ax, ay] = sel.startWorld
+                const [bx, by] = eventToWorld2D(event)
+                setSelection(
+                    entitiesInBox(drawing.entities, activePlane, {
+                        minX: Math.min(ax, bx),
+                        minY: Math.min(ay, by),
+                        maxX: Math.max(ax, bx),
+                        maxY: Math.max(ay, by)
+                    })
+                )
+            }
+            setMarquee(null)
             return
         }
         if (activeTool !== "select") {
@@ -282,16 +365,34 @@ export const DrawingCanvas = () => {
             event.currentTarget.releasePointerCapture(event.pointerId)
             panRef.current = null
         }
+        if (erasingRef.current) {
+            erasingRef.current = false
+            event.currentTarget.releasePointerCapture(event.pointerId)
+        }
+        if (selectDragRef.current && selectDragRef.current.pointerId === event.pointerId) {
+            event.currentTarget.releasePointerCapture(event.pointerId)
+            selectDragRef.current = null
+        }
         setSnapPoint(null)
+        setEraserPoint(null)
+        setMarquee(null)
     }
 
-    // Drop the snap marker when the cursor leaves the canvas or the active tool
-    // changes (e.g. back to `select`), so a stale crosshair never lingers.
-    const handlePointerLeave = () => setSnapPoint(null)
+    // Drop the cursor markers when the pointer leaves the canvas or the active
+    // tool changes, so neither the snap crosshair nor the eraser ring lingers.
+    // The marquee is NOT cleared on leave — a captured drag keeps reporting moves,
+    // so it survives straying off-canvas and clears on up/cancel instead.
+    const handlePointerLeave = () => {
+        setSnapPoint(null)
+        setEraserPoint(null)
+    }
 
-    // biome-ignore lint/correctness/useExhaustiveDependencies: clear the marker on any tool switch.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: clear the markers on any tool switch.
     useEffect(() => {
         setSnapPoint(null)
+        setEraserPoint(null)
+        setMarquee(null)
+        selectDragRef.current = null
     }, [activeTool])
 
     // Delete/Backspace removes the current selection in one undoable step. Bound
@@ -317,6 +418,25 @@ export const DrawingCanvas = () => {
     // THIS so they fill the window for any pan/zoom, not just the centred view.
     const world = worldRect(viewBox)
 
+    // Closed loops on the active plane, painted as filled faces under the strokes.
+    // Recomputed only when the document or plane changes (the graph walk is not
+    // free); a contour shows the moment its loop closes — committing a closed
+    // polyline, or separate segments meeting end-to-end.
+    const regions = useMemo(
+        () => detectRegions(drawing).filter((region) => region.plane === activePlane),
+        [drawing, activePlane]
+    )
+
+    // Entities that bound no closed region — open paths, spurs, skew, or a loop a
+    // stray segment disqualified. They render red: the geometry breaking the 3D
+    // build. Intrinsic to the document (not the active plane), so keyed on it.
+    const brokenIds = useMemo(() => detectBrokenEntities(drawing), [drawing])
+
+    // The eraser ring's radius in world units, matching the hit-test tolerance so
+    // the sponge removes exactly what it covers. Falls back before the SVG is
+    // measured; recomputed each render (the cursor re-renders on every move).
+    const eraseRadius = svgRef.current ? (PICK_RADIUS_PX * viewBox.w) / svgRef.current.clientWidth : viewBox.w / 80
+
     return (
         <svg
             ref={svgRef}
@@ -336,16 +456,23 @@ export const DrawingCanvas = () => {
             <g transform={flippedY}>
                 <Grid rect={world} gridSize={gridSize} dense={viewBox.w / gridSize > MAX_GRID_LINES_ACROSS} />
                 <Axes rect={world} />
+                {regions.map((region, i) => (
+                    // biome-ignore lint/suspicious/noArrayIndexKey: regions are positional, derived fresh each detect — no stable id.
+                    <RegionFill key={i} contour={region.contour} />
+                ))}
                 {drawing.entities.map((entity) => (
                     <EntityShape
                         key={entity.id}
                         entity={entity}
                         plane={activePlane}
                         selected={selectedIds.has(entity.id)}
+                        broken={brokenIds.has(entity.id)}
                     />
                 ))}
                 {preview && <EntityShape entity={preview} plane={activePlane} preview />}
                 {snapPoint && <SnapMarker point={snapPoint} span={viewBox.w} />}
+                {isEraser && eraserPoint && <EraseCursor point={eraserPoint} radius={eraseRadius} />}
+                {marquee && <SelectionBox start={marquee.start} current={marquee.current} />}
                 {draw.closeArmed && draw.firstVertex && <CloseMarker point={draw.firstVertex} span={viewBox.w} />}
             </g>
         </svg>
@@ -353,22 +480,40 @@ export const DrawingCanvas = () => {
 }
 
 /**
+ * The greyish face of one closed region: its ordered contour (plane view space,
+ * the same coordinates the entities render in) as a filled polygon with no stroke,
+ * laid under the entity strokes so the loop's own outline stays crisp on top. The
+ * translucent fill lets the grid read faintly through the face.
+ */
+const RegionFill = ({ contour }: { contour: Vec2[] }) => {
+    if (contour.length < 3) {
+        return null
+    }
+    const pointsAttr = contour.map(([x, y]) => `${x},${y}`).join(" ")
+    return <polygon points={pointsAttr} stroke="none" className="fill-drawing-fill" />
+}
+
+/**
  * One flattened entity as a constant-weight polyline (open) or polygon (closed).
  * The in-progress ghost (`preview`) reuses the same flattening but renders dashed
  * in the accent color so it reads as live and not-yet-committed. A `selected`
  * entity renders heavier in the highlight color — a third hue distinct from the
- * entity ink and the preview accent.
+ * entity ink and the preview accent. A `broken` entity (bounds no closed region,
+ * so it breaks the 3D build) renders red; selection still wins so it stays
+ * visible while picked to fix or delete.
  */
 const EntityShape = ({
     entity,
     plane,
     preview = false,
-    selected = false
+    selected = false,
+    broken = false
 }: {
     entity: Entity
     plane: Plane
     preview?: boolean
     selected?: boolean
+    broken?: boolean
 }) => {
     const { points, closed } = flattenEntity(entity, plane)
     if (points.length < 2) {
@@ -379,7 +524,9 @@ const EntityShape = ({
         ? "stroke-drawing-preview stroke-2"
         : selected
           ? "stroke-drawing-selected stroke-emphasis"
-          : "stroke-drawing-entity stroke-2"
+          : broken
+            ? "stroke-drawing-broken stroke-2"
+            : "stroke-drawing-entity stroke-2"
     const shared = {
         points: pointsAttr,
         fill: "none",
@@ -497,6 +644,49 @@ const CloseMarker = ({ point, span }: { point: Vec2; span: number }) => {
             fill="none"
             vectorEffect="non-scaling-stroke"
             className="stroke-drawing-preview stroke-2"
+        />
+    )
+}
+
+/**
+ * The eraser "sponge" cursor: a translucent red disc at the pointer whose radius
+ * equals the hit-test pick radius, so it shows exactly what a sweep will remove.
+ * Constant-weight stroke; non-interactive so it never intercepts the pointer.
+ * Rendered inside the flipped group, sharing the entities' coordinate space.
+ */
+const EraseCursor = ({ point, radius }: { point: Vec2; radius: number }) => {
+    const [x, y] = point
+    return (
+        <circle
+            cx={x}
+            cy={y}
+            r={radius}
+            vectorEffect="non-scaling-stroke"
+            className="pointer-events-none fill-drawing-broken/10 stroke-drawing-broken"
+        />
+    )
+}
+
+/**
+ * The select marquee: a dashed, faintly-filled rectangle between the drag's two
+ * world-2D corners, in the selection-highlight hue so it reads as "picking". Both
+ * corners live in the entities' flipped coordinate space, so min-corner + extent
+ * lines the box up with what it covers. Non-interactive; constant-weight stroke.
+ */
+const SelectionBox = ({ start, current }: { start: Vec2; current: Vec2 }) => {
+    const x = Math.min(start[0], current[0])
+    const y = Math.min(start[1], current[1])
+    const width = Math.abs(current[0] - start[0])
+    const height = Math.abs(current[1] - start[1])
+    return (
+        <rect
+            x={x}
+            y={y}
+            width={width}
+            height={height}
+            vectorEffect="non-scaling-stroke"
+            strokeDasharray="4 3"
+            className="pointer-events-none fill-drawing-selected/10 stroke-drawing-selected"
         />
     )
 }

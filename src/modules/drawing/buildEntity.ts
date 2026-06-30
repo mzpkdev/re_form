@@ -28,6 +28,18 @@ export const buildEntity = (tool: Tool, worldPoints2D: Vec2[], plane: Plane, clo
             if (coincident(p0, p1)) return null
             return { id: newId(), type: "line", a: lift(p0), b: lift(p1) }
         }
+        case "rectangle": {
+            // Two opposite corners → an axis-aligned, closed 4-corner polyline. A
+            // rectangle is NOT its own entity type: it emits exactly the closed
+            // polyline a hand-drawn box would, so regions/extrude/serialize and
+            // hit-testing treat it identically. Zero width or height is a line,
+            // not a face — reject it.
+            if (worldPoints2D.length < 2) return null
+            const [p0, p2] = worldPoints2D
+            if (Math.abs(p2[0] - p0[0]) < EPSILON || Math.abs(p2[1] - p0[1]) < EPSILON) return null
+            const corners: Vec2[] = [p0, [p2[0], p0[1]], p2, [p0[0], p2[1]]]
+            return { id: newId(), type: "polyline", points: corners.map(lift), closed: true }
+        }
         case "circle": {
             if (worldPoints2D.length < 2) return null
             const [center, rim] = worldPoints2D

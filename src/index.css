@@ -35,6 +35,15 @@
        from the dark entity ink and the orange preview/snap accent, so a
        selection never reads as "live ghost" or plain committed geometry. */
     --color-drawing-selected: #2f7fff;
+    /* A "broken" line — one that bounds no closed region, so the 3D
+       reconstruction can't use it (open path, dangling spur, skew, or the loop a
+       stray segment disqualifies). A saturated red, distinct from every other
+       drawing hue, so it reads as "this is why nothing extrudes". */
+    --color-drawing-broken: #e5484d;
+    /* The face fill for a CLOSED region (a detected loop): a soft, translucent
+       neutral grey so a closed profile reads as a filled face while the grid
+       still whispers through and overlapping regions don't darken to ink. */
+    --color-drawing-fill: #8b8a944d;
 
     /* ---- Color · Surface & background ---- */
     --color-background: #faf9fe;

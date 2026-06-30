@@ -1,4 +1,4 @@
-import { ChevronDown, Download, PenTool, Settings, Upload } from "lucide-react"
+import { ChevronDown, Download, Settings, Upload } from "lucide-react"
 import { useEffect, useRef, useState } from "react"
 import { cn } from "../design/cn"
 
@@ -119,6 +119,18 @@ export const TopBar = ({
                     </div>
                     <button
                         type="button"
+                        onClick={() => onNavigate("draw")}
+                        className={cn(
+                            "pb-1 text-sm transition-colors",
+                            view === "draw"
+                                ? "border-b-2 border-primary font-bold text-primary"
+                                : "font-medium text-on-surface-variant hover:text-primary"
+                        )}
+                    >
+                        Draw
+                    </button>
+                    <button
+                        type="button"
                         onClick={() => onNavigate("editor")}
                         className={cn(
                             "pb-1 text-sm transition-colors",
@@ -127,20 +139,7 @@ export const TopBar = ({
                                 : "font-medium text-on-surface-variant hover:text-primary"
                         )}
                     >
-                        Editor
-                    </button>
-                    <button
-                        type="button"
-                        onClick={() => onNavigate("draw")}
-                        className={cn(
-                            "flex items-center gap-1.5 pb-1 text-sm transition-colors",
-                            view === "draw"
-                                ? "border-b-2 border-primary font-bold text-primary"
-                                : "font-medium text-on-surface-variant hover:text-primary"
-                        )}
-                    >
-                        <PenTool className="size-4" />
-                        Draw
+                        3D View
                     </button>
                 </nav>
             </div>

@@ -4,31 +4,33 @@ import type { Drawing, Entity, Plane, Vec2 } from "./types"
 
 /**
  * Closed-region detection: the pure core that turns a 2D drawing into the set of
- * closed loops the Editor view extrudes into solids. A region is any closed loop
- * formed by CONNECTED segments — drawn as a single closed polyline, or as
- * separate lines/polylines that meet end-to-end — so the user is not forced to
- * draw a profile with one tool. React-free; the only inputs are the immutable
+ * closed loops the Editor view extrudes into solids. A region is either a single
+ * CLOSED polyline (an explicit, self-declared loop) or a loop ASSEMBLED from
+ * separate lines/open polylines that meet end-to-end — so the user is not forced
+ * to draw a profile with one tool. React-free; the only inputs are the immutable
  * `Drawing` and its plain geometry.
  *
- * Algorithm (per principal plane):
- *   1. Group line/polyline entities by the plane they lie on (`inferPlane`),
- *      skipping anything off a principal plane or not made of straight segments.
- *   2. Project each entity's points to that plane's 2D view space and collect its
- *      segments (a line → one a–b; a polyline → consecutive pairs, plus last→first
- *      when `closed`).
- *   3. Build an undirected graph: nodes are unique 2D points (grid-snapped, so
- *      equal coordinates are EXACT — a node is keyed by its rounded "x,y" string);
- *      edges are the segments.
+ * Algorithm:
+ *   1. Bucket entities by the principal plane they lie on (`inferPlane`), skipping
+ *      anything off a principal plane or with no straight segments (circle/arc).
+ *   2. A CLOSED polyline already names its own contour, so it is emitted as a
+ *      region directly (its projected points) and does NOT enter the shared graph.
+ *      This is what lets two closed profiles that share an edge on one plane (two
+ *      stacked rectangles in a top view, say) both be detected — dissolving them
+ *      into one graph would raise their shared nodes past degree 2 and disqualify
+ *      BOTH.
+ *   3. The remaining entities (lines + open polylines) per plane build an
+ *      undirected graph: nodes are unique 2D points (grid-snapped, so equal
+ *      coordinates are EXACT — keyed by a rounded "x,y" string); edges are the
+ *      segments (a line → one a–b; an open polyline → consecutive pairs).
  *   4. A connected component in which EVERY node has degree exactly 2 is a single
- *      closed loop — walk it into an ordered contour. Components with any node of
- *      degree ≠ 2 (open paths, dangling spurs, branches, junctions) are NOT closed
- *      regions and are skipped.
+ *      closed loop — walked into an ordered contour. Components with any node of
+ *      degree ≠ 2 (open paths, dangling spurs, branches, junctions) are skipped.
  *
- * KNOWN LIMITATION (deferred): a stray segment touching a loop — a spur off a
- * corner, or a junction where three+ segments meet — pushes a node's degree past
- * 2, so the whole component is skipped and that loop is not detected. Nested loops
- * (holes) are likewise out of scope: each loop becomes its own filled region, with
- * no subtraction.
+ * KNOWN LIMITATION (deferred): a stray segment touching a loop ASSEMBLED from open
+ * segments still pushes a node's degree past 2, so that loop is skipped — a
+ * self-declared closed polyline is immune to this (step 2). Nested loops (holes)
+ * remain out of scope: each loop is its own filled region, with no subtraction.
  */
 
 /** How precisely a node coordinate is rounded before it becomes a graph key. */
@@ -36,6 +38,13 @@ const KEY_DECIMALS = 6
 
 /** A stable string key for a 2D point. Grid-snapped points compare exactly. */
 const keyOf = (p: Vec2): string => `${p[0].toFixed(KEY_DECIMALS)},${p[1].toFixed(KEY_DECIMALS)}`
+
+/** Undirected key for a 2D segment — its two endpoint keys, order-independent. */
+const edgeKey = (a: Vec2, b: Vec2): string => {
+    const ka = keyOf(a)
+    const kb = keyOf(b)
+    return ka < kb ? `${ka}|${kb}` : `${kb}|${ka}`
+}
 
 /** A graph node: its 2D coordinate plus the keys of every node it connects to. */
 interface Node {
@@ -158,13 +167,24 @@ const components = (nodes: Map<string, Node>): string[][] => {
  * regions is not significant.
  */
 export const detectRegions = (doc: Drawing): { plane: Plane; contour: Vec2[] }[] => {
-    // Bucket entities by the principal plane they lie on.
+    const regions: { plane: Plane; contour: Vec2[] }[] = []
+
+    // Bucket the GRAPH-fed entities (lines + open polylines) by plane. A closed
+    // polyline names its own loop, so it is emitted as a region directly and kept
+    // out of the shared graph (so it can't be disqualified by — or disqualify — a
+    // neighbour sharing one of its edges).
     const byPlane = new Map<Plane, Entity[]>()
     for (const entity of doc.entities) {
         const pts = planePoints(entity)
         if (!pts) continue
         const plane = inferPlane(pts)
         if (!plane) continue
+        if (entity.type === "polyline" && entity.closed) {
+            if (entity.points.length >= 3) {
+                regions.push({ plane, contour: entity.points.map((p) => projectPoint(p, plane)) })
+            }
+            continue
+        }
         const bucket = byPlane.get(plane)
         if (bucket) {
             bucket.push(entity)
@@ -173,7 +193,7 @@ export const detectRegions = (doc: Drawing): { plane: Plane; contour: Vec2[] }[]
         }
     }
 
-    const regions: { plane: Plane; contour: Vec2[] }[] = []
+    // Assemble loops from the connected straight segments left on each plane.
     for (const [plane, entities] of byPlane) {
         const nodes = new Map<string, Node>()
         for (const entity of entities) {
@@ -194,4 +214,50 @@ export const detectRegions = (doc: Drawing): { plane: Plane; contour: Vec2[] }[]
         }
     }
     return regions
+}
+
+/**
+ * Classify which line/polyline entities BREAK the 3D reconstruction: the ones
+ * carrying a straight segment that does not bound any detected closed region.
+ * The Editor reconstructs solids only from closed loops (`detectRegions`), so
+ * every other straight segment is dead geometry the build silently drops — and
+ * worse, a single stray segment touching a loop ASSEMBLED from open segments
+ * raises a node's degree past 2 and disqualifies the whole loop, turning a
+ * would-be face into nothing. Surfacing these lets the UI flag exactly what to fix.
+ *
+ * An entity id is returned when the entity is a line or polyline AND either:
+ *   - it lies on no principal plane (skew — it can never be an orthographic
+ *     view), or
+ *   - any of its projected segments is not an edge of a detected region.
+ *
+ * Curves (circle/arc) carry no straight segments and are never classified — they
+ * are not "lines". A degenerate single-point polyline draws and breaks nothing.
+ * Pure: the only inputs are the immutable `Drawing` and its geometry.
+ */
+export const detectBrokenEntities = (doc: Drawing): Set<string> => {
+    // The segments that DO bound a closed region — the silhouette geometry the
+    // reconstruction can actually use. Everything else is dead.
+    const goodEdges = new Set<string>()
+    for (const { contour } of detectRegions(doc)) {
+        for (let i = 0; i < contour.length; i++) {
+            goodEdges.add(edgeKey(contour[i], contour[(i + 1) % contour.length]))
+        }
+    }
+
+    const broken = new Set<string>()
+    for (const entity of doc.entities) {
+        const pts = planePoints(entity)
+        if (!pts) continue // curves have no straight segments — never "lines"
+        const plane = inferPlane(pts)
+        if (!plane) {
+            broken.add(entity.id) // skew: cannot be an orthographic view at all
+            continue
+        }
+        const segments = entitySegments(entity, plane)
+        if (segments.length === 0) continue // a 1-point polyline breaks nothing
+        if (segments.some(([a, b]) => !goodEdges.has(edgeKey(a, b)))) {
+            broken.add(entity.id)
+        }
+    }
+    return broken
 }

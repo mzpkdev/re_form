@@ -60,14 +60,17 @@ export { drawingToManifold, extrudeProfileBetween, inferPlane } from "./extrude"
 // File I/O UI: export/import the 2D drawing document as JSON.
 export { FileControl } from "./FileControl"
 export { GridControl } from "./GridControl"
-// Pure pointer-vs-entity hit testing (the testable core of click selection).
-export { hitTest } from "./hitTest"
+// Pure pointer-vs-entity hit testing: click-pick (`hitTest`) and marquee
+// box-select (`entitiesInBox`) — the testable cores of selection.
+export { type Box, entitiesInBox, hitTest } from "./hitTest"
 export { PlaneSwitcher } from "./PlaneSwitcher"
 // Persistence: localStorage autosave + hydrate-once for the drawing document.
 export { initPersistence, loadStoredDrawing, STORAGE_KEY, saveDrawing } from "./persistence"
 export { flattenEntity, planeNormal, projectPoint, tessellateEntity, unprojectPoint } from "./project"
-// Pure closed-region detection: connected-segment loops → contours per plane.
-export { detectRegions } from "./regions"
+// Pure closed-region detection: connected-segment loops → contours per plane,
+// plus the inverse — line/polyline entities that bound no region and so break
+// the 3D reconstruction.
+export { detectBrokenEntities, detectRegions } from "./regions"
 export { deserialize, serialize } from "./serialize"
 export { constrainToAngle, snapToGrid } from "./snap"
 export { Toolbar } from "./Toolbar"

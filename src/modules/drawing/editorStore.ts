@@ -13,7 +13,7 @@ import type { Entity, Plane } from "./types"
  * and React bails out of consumers whose slice is unchanged.
  */
 
-export type Tool = "select" | "line" | "circle" | "polyline" | "arc"
+export type Tool = "select" | "line" | "rectangle" | "circle" | "polyline" | "arc" | "eraser"
 
 let activePlane: Plane = "front"
 let activeTool: Tool = "select"

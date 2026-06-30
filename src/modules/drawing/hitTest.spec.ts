@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test"
-import { hitTest } from "./hitTest"
+import { entitiesInBox, hitTest } from "./hitTest"
 import type { Entity, Line, Polyline, Vec2 } from "./types"
 
 const context = describe
@@ -143,6 +143,68 @@ describe("hitTest", () => {
             expect(hitTest(entities, far, "front", 1)).toBeNull()
             // Right on it: a collapsed mark is still clickable at its location.
             expect(hitTest(entities, [0, 0], "front", 1)).toBe("d")
+        })
+    })
+})
+
+describe("entitiesInBox", () => {
+    context("a box that fully contains an entity", () => {
+        it("selects the line", () => {
+            expect(entitiesInBox([hline("a")], "front", { minX: -1, minY: -1, maxX: 11, maxY: 1 })).toEqual(["a"])
+        })
+    })
+
+    context("crossing semantics (the box need only touch the entity)", () => {
+        it("selects when one endpoint is inside the box", () => {
+            // Box covers x∈[5,15]; the line's (10,0) end is inside, (0,0) is not.
+            expect(entitiesInBox([hline("a")], "front", { minX: 5, minY: -1, maxX: 15, maxY: 1 })).toEqual(["a"])
+        })
+
+        it("selects when the segment passes through with NO endpoint inside", () => {
+            // Box x∈[3,7] sits in the middle of the (0,0)–(10,0) line: neither end
+            // is inside, but the segment crosses the box's left and right edges.
+            expect(entitiesInBox([hline("a")], "front", { minX: 3, minY: -1, maxX: 7, maxY: 1 })).toEqual(["a"])
+        })
+
+        it("selects a closed polygon when the box crosses one of its edges", () => {
+            // Box straddles the square's left edge (x=0 from y=0..10).
+            expect(entitiesInBox([square("s")], "front", { minX: -1, minY: 3, maxX: 1, maxY: 7 })).toEqual(["s"])
+        })
+    })
+
+    context("a box that touches nothing", () => {
+        it("returns no ids when the box is clear of the line", () => {
+            // The line is at y=0; this box sits at y∈[5,8], well above it.
+            expect(entitiesInBox([hline("a")], "front", { minX: 0, minY: 5, maxX: 10, maxY: 8 })).toEqual([])
+        })
+
+        it("does NOT select a polygon when the box floats inside it (no edge crossed)", () => {
+            // Dead-center box inside the 10×10 square, touching no edge — a fill is
+            // not a hit, matching click-pick (only the outline counts).
+            expect(entitiesInBox([square("s")], "front", { minX: 3, minY: 3, maxX: 7, maxY: 7 })).toEqual([])
+        })
+    })
+
+    context("multiple entities", () => {
+        it("returns every crossed entity in document (paint) order", () => {
+            const near: Line = { id: "near", type: "line", a: [0, 0, 0], b: [10, 0, 0] }
+            const far: Line = { id: "far", type: "line", a: [0, 5, 0], b: [10, 5, 0] }
+            const box = { minX: -1, minY: -1, maxX: 11, maxY: 6 }
+            expect(entitiesInBox([near, far], "front", box)).toEqual(["near", "far"])
+            // Only the lower line when the box clears the upper one.
+            expect(entitiesInBox([near, far], "front", { minX: -1, minY: -1, maxX: 11, maxY: 1 })).toEqual(["near"])
+        })
+    })
+
+    context("plane awareness", () => {
+        it("uses the active plane's projection, like hitTest", () => {
+            // A line along world Z collapses to a point on `front` but is a full
+            // segment on `top`. A box around (0,-5) in top space crosses it on
+            // `top`; on `front` the geometry is a dot at (0,0), nowhere near.
+            const zline: Line = { id: "z", type: "line", a: [0, 0, 0], b: [0, 0, 10] }
+            const box = { minX: -1, minY: -6, maxX: 1, maxY: -4 }
+            expect(entitiesInBox([zline], "front", box)).toEqual([])
+            expect(entitiesInBox([zline], "top", box)).toEqual(["z"])
         })
     })
 })

@@ -1,4 +1,4 @@
-import { Minus, MousePointer2, Spline } from "lucide-react"
+import { Eraser, Minus, MousePointer2, Spline, Square } from "lucide-react"
 import { cn } from "../../design/cn"
 import { setActiveTool, type Tool, useActiveTool } from "./editorStore"
 
@@ -6,13 +6,15 @@ import { setActiveTool, type Tool, useActiveTool } from "./editorStore"
  * The drawing tool palette: a compact vertical column of icon buttons that
  * reads the active tool and switches it. The active tool is highlighted with the
  * primary accent (same active-state idiom as the app `Sidebar`). Technical
- * drawing offers only Select, Line, and Polyline — there is no freeform circle.
- * Selection and delete are a later phase; for now `select` just pans the canvas.
+ * drawing offers Select, Line, Rectangle, and Polyline — there is no freeform
+ * circle — plus an Eraser sponge that removes whatever entity it is dragged over.
  */
 const TOOLS: { tool: Tool; label: string; icon: typeof Minus }[] = [
     { tool: "select", label: "Select", icon: MousePointer2 },
     { tool: "line", label: "Line", icon: Minus },
-    { tool: "polyline", label: "Polyline", icon: Spline }
+    { tool: "rectangle", label: "Rectangle", icon: Square },
+    { tool: "polyline", label: "Polyline", icon: Spline },
+    { tool: "eraser", label: "Eraser", icon: Eraser }
 ]
 
 export const Toolbar = () => {

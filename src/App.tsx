@@ -85,15 +85,19 @@ export const App = () => {
     return (
         <div className="flex h-screen w-screen flex-col overflow-hidden bg-background font-sans text-on-background">
             <TopBar view={view} onNavigate={setView} onImport={setStlFile} onExport={handleExport} />
-            {view !== "draw" ? (
-                <main className={cn("min-h-0 flex-1", view === "editor" ? "flex" : "hidden")}>
-                    <Sidebar activePanel={activePanel} onSelect={setActivePanel} onExport={handleExport} />
-                    <Viewport file={stlFile} />
-                    <MeshToolsPanel open={activePanel === "mesh"} onClose={() => setActivePanel(null)} />
-                    <ObfuscatePanel open={activePanel === "obfuscate"} onClose={() => setActivePanel(null)} />
-                    <AssistantPanel open={activePanel === "ai"} onClose={() => setActivePanel(null)} />
-                </main>
-            ) : null}
+            {/* The 3D editor main stays MOUNTED for the app's lifetime — only its
+                visibility toggles. Unmounting it on the Draw view tore down the
+                Viewport's WebGL context and mesh, and the rebuild on return raced
+                the remount (getMesh on a freed Manifold throws), leaving the model
+                blank after a Draw round-trip. Hidden-not-removed keeps the live
+                mesh; the build effect just swaps its geometry on re-entry. */}
+            <main className={cn("min-h-0 flex-1", view === "editor" ? "flex" : "hidden")}>
+                <Sidebar activePanel={activePanel} onSelect={setActivePanel} onExport={handleExport} />
+                <Viewport file={stlFile} />
+                <MeshToolsPanel open={activePanel === "mesh"} onClose={() => setActivePanel(null)} />
+                <ObfuscatePanel open={activePanel === "obfuscate"} onClose={() => setActivePanel(null)} />
+                <AssistantPanel open={activePanel === "ai"} onClose={() => setActivePanel(null)} />
+            </main>
             {view === "draw" ? (
                 <main className="flex min-h-0 flex-1">
                     <DrawingEditor />

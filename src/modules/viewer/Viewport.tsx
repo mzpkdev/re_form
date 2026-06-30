@@ -6,6 +6,15 @@ import { geometryToManifold, meshToBufferGeometry } from "../../lib/model"
 import { getManifold, setManifold, useModelVersion } from "../../lib/modelStore"
 import { parseStl } from "../../lib/stl"
 
+/** Dark ink for the crease overlay — matches the 2D editor's entity ink. */
+const EDGE_COLOR = 0x1a1b1f
+/**
+ * Minimum angle (degrees) between two faces for their shared edge to be drawn as
+ * a crease. 1° keeps a flat face's internal triangulation invisible while still
+ * outlining every real corner, so the overlay traces surfaces, not triangles.
+ */
+const EDGE_THRESHOLD_DEG = 1
+
 export const Viewport = ({ file }: { file: File | null }) => {
     const sectionRef = useRef<HTMLElement>(null)
     const rendererRef = useRef<THREE.WebGLRenderer | null>(null)
@@ -18,6 +27,11 @@ export const Viewport = ({ file }: { file: File | null }) => {
     // The re-bake effect derives geometry from getManifold().
     const meshRef = useRef<THREE.Mesh | null>(null)
     const materialRef = useRef<THREE.MeshStandardMaterial | null>(null)
+    // The crease overlay riding on the mesh, plus the line material it shares
+    // across geometry swaps. Built once in the mount effect like the surface
+    // material; the re-bake effect rebuilds the line GEOMETRY per model version.
+    const edgesRef = useRef<THREE.LineSegments | null>(null)
+    const edgesMaterialRef = useRef<THREE.LineBasicMaterial | null>(null)
     const [nonManifold, setNonManifold] = useState(false)
     // Bumped by the store on every setManifold; drives the re-bake effect.
     const modelVersion = useModelVersion()
@@ -55,14 +69,24 @@ export const Viewport = ({ file }: { file: File | null }) => {
         const material = new THREE.MeshStandardMaterial({
             color: 0xec6530,
             roughness: 0.55,
-            metalness: 0.1
+            metalness: 0.1,
+            // Per-face normals so each facet is uniformly lit and meets its
+            // neighbours at a hard crease — a faceted CAD read, not a smooth blob.
+            flatShading: true,
+            // Push faces slightly back so the crease overlay sits cleanly on the
+            // edges instead of z-fighting the surface it outlines.
+            polygonOffset: true,
+            polygonOffsetFactor: 1,
+            polygonOffsetUnits: 1
         })
+        const edgesMaterial = new THREE.LineBasicMaterial({ color: EDGE_COLOR })
 
         rendererRef.current = renderer
         sceneRef.current = scene
         cameraRef.current = camera
         controlsRef.current = controls
         materialRef.current = material
+        edgesMaterialRef.current = edgesMaterial
 
         let frame = 0
         const renderLoop = () => {
@@ -92,11 +116,15 @@ export const Viewport = ({ file }: { file: File | null }) => {
             renderer.dispose()
             renderer.domElement.remove()
             material.dispose()
+            edgesMaterial.dispose()
+            edgesRef.current?.geometry.dispose()
+            edgesRef.current = null
             rendererRef.current = null
             sceneRef.current = null
             cameraRef.current = null
             controlsRef.current = null
             materialRef.current = null
+            edgesMaterialRef.current = null
         }
     }, [])
 
@@ -196,22 +224,35 @@ export const Viewport = ({ file }: { file: File | null }) => {
         const camera = cameraRef.current
         const controls = controlsRef.current
         const material = materialRef.current
-        if (!m || !scene || !camera || !controls || !material) {
+        const edgesMaterial = edgesMaterialRef.current
+        if (!m || !scene || !camera || !controls || !material || !edgesMaterial) {
             return
         }
 
         const next = meshToBufferGeometry(m.getMesh())
+        const nextEdges = new THREE.EdgesGeometry(next, EDGE_THRESHOLD_DEG)
         const mesh = meshRef.current
         if (mesh) {
             const previous = mesh.geometry
             mesh.geometry = next
             previous.dispose()
+            const edges = edgesRef.current
+            if (edges) {
+                const previousEdges = edges.geometry
+                edges.geometry = nextEdges
+                previousEdges.dispose()
+            }
             return
         }
 
         const created = new THREE.Mesh(next, material)
         meshRef.current = created
         scene.add(created)
+        // The crease overlay rides on the mesh as a child, so it inherits the
+        // mesh's transform and stays registered with its surfaces.
+        const edges = new THREE.LineSegments(nextEdges, edgesMaterial)
+        edgesRef.current = edges
+        created.add(edges)
 
         // Frame the camera around the mesh, but only on first creation.
         next.computeBoundingBox()

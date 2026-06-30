@@ -298,6 +298,80 @@ describe("buildEntity", () => {
         })
     })
 
+    context("rectangle", () => {
+        it("builds a closed axis-aligned 4-corner polyline from two opposite corners", () => {
+            const p0: Vec2 = [0, 0]
+            const p2: Vec2 = [10, 20]
+            // Corners walk p0 → (p2x,p0y) → p2 → (p0x,p2y), each lifted onto the plane.
+            const expected: Record<Plane, Vec3[]> = {
+                front: [
+                    [0, 0, 0],
+                    [10, 0, 0],
+                    [10, 20, 0],
+                    [0, 20, 0]
+                ],
+                top: [
+                    [0, 0, 0],
+                    [10, 0, 0],
+                    [10, 0, -20],
+                    [0, 0, -20]
+                ],
+                side: [
+                    [0, 0, 0],
+                    [0, 0, -10],
+                    [0, 20, -10],
+                    [0, 20, 0]
+                ]
+            }
+            for (const plane of planes) {
+                const entity = buildEntity("rectangle", [p0, p2], plane) as Polyline
+                expect(entity.type).toBe("polyline")
+                expect(entity.closed).toBe(true)
+                expect(entity.points.map(norm)).toEqual(expected[plane])
+            }
+        })
+
+        it("returns null for a zero-width or zero-height drag (a line, not a face)", () => {
+            for (const plane of planes) {
+                expect(
+                    buildEntity(
+                        "rectangle",
+                        [
+                            [5, 5],
+                            [5, 20]
+                        ],
+                        plane
+                    )
+                ).toBeNull()
+                expect(
+                    buildEntity(
+                        "rectangle",
+                        [
+                            [5, 5],
+                            [20, 5]
+                        ],
+                        plane
+                    )
+                ).toBeNull()
+                expect(
+                    buildEntity(
+                        "rectangle",
+                        [
+                            [5, 5],
+                            [5, 5]
+                        ],
+                        plane
+                    )
+                ).toBeNull()
+            }
+        })
+
+        it("returns null with fewer than two points", () => {
+            expect(buildEntity("rectangle", [], "front")).toBeNull()
+            expect(buildEntity("rectangle", [[1, 2]], "front")).toBeNull()
+        })
+    })
+
     context("non-constructive tools", () => {
         it("returns null for select, arc, and unknown tools regardless of points", () => {
             const pts: Vec2[] = [

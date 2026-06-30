@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test"
 import { addEntity, createDrawing } from "./document"
 import { projectPoint, unprojectPoint } from "./project"
-import { detectRegions } from "./regions"
+import { detectBrokenEntities, detectRegions } from "./regions"
 import type { Drawing, Entity, Line, Plane, Polyline, Vec2, Vec3 } from "./types"
 
 const context = describe
@@ -153,17 +153,18 @@ describe("detectRegions", () => {
         })
     })
 
-    context("a dangling spur breaks detection (documented limitation)", () => {
-        it("skips a square with a stray line off one corner", () => {
-            // The closed square's corner [0,0] now also touches a spur, raising its
-            // degree to 3; the whole connected component is no longer all-degree-2.
+    context("a closed polyline is its own region, immune to stray neighbors", () => {
+        it("detects the closed square despite a stray line off one corner", () => {
+            // The spur touches corner [0,0] but the closed polyline names its own
+            // loop directly, so it never enters the graph that the spur poisons.
             const regions = detectRegions(
                 docOf(polylineOn("front", SQUARE, true), lineOn("front", SQUARE[0], [-40, -40]))
             )
-            expect(regions).toHaveLength(0)
+            expect(regions).toHaveLength(1)
+            expect(cornerKeys(regions[0].contour)).toEqual(squareKeys("front"))
         })
 
-        it("still detects a separate clean square alongside the spoiled one", () => {
+        it("detects two closed squares even when a spur touches one", () => {
             const far: Vec2[] = SQUARE.map(([x, y]) => [x + 200, y + 200])
             const regions = detectRegions(
                 docOf(
@@ -172,7 +173,53 @@ describe("detectRegions", () => {
                     polylineOn("front", far, true)
                 )
             )
-            expect(regions).toHaveLength(1)
+            expect(regions).toHaveLength(2)
+        })
+    })
+
+    context("two closed profiles sharing an edge on one plane", () => {
+        it("detects BOTH instead of disqualifying them at the shared nodes (bug repro)", () => {
+            // The two top-plane profiles from the reported drawing: a 30×30 outline
+            // and a 30×10 strip inside it, sharing the bottom edge and corners.
+            const outer = polylineOn(
+                "top",
+                [
+                    [0, 0],
+                    [0, 10],
+                    [0, 30],
+                    [30, 30],
+                    [30, 0]
+                ],
+                true
+            )
+            const inner = polylineOn(
+                "top",
+                [
+                    [0, 10],
+                    [30, 10],
+                    [30, 0],
+                    [0, 0]
+                ],
+                true
+            )
+            expect(detectRegions(docOf(outer, inner))).toHaveLength(2)
+            // …and neither is flagged as breaking the 3D build.
+            expect(detectBrokenEntities(docOf(outer, inner)).size).toBe(0)
+        })
+    })
+
+    context("a spur still breaks a loop ASSEMBLED from separate open segments", () => {
+        it("skips a line-built square with a stray line off one corner", () => {
+            const regions = detectRegions(
+                docOf(
+                    lineOn("front", SQUARE[0], SQUARE[1]),
+                    lineOn("front", SQUARE[1], SQUARE[2]),
+                    lineOn("front", SQUARE[2], SQUARE[3]),
+                    lineOn("front", SQUARE[3], SQUARE[0]),
+                    lineOn("front", SQUARE[0], [-40, -40])
+                )
+            )
+            expect(regions).toHaveLength(0)
         })
     })
 
@@ -222,6 +269,92 @@ describe("detectRegions", () => {
                 normal: [0, 0, 1]
             })
             expect(detectRegions(circleDoc)).toHaveLength(0)
+        })
+    })
+})
+
+describe("detectBrokenEntities", () => {
+    context("geometry that bounds a closed region is not broken", () => {
+        it("clears a single closed polyline square", () => {
+            const square = polylineOn("front", SQUARE, true)
+            expect(detectBrokenEntities(docOf(square)).size).toBe(0)
+        })
+
+        it("clears four separate lines meeting at the corners", () => {
+            const lines = [
+                lineOn("front", SQUARE[0], SQUARE[1]),
+                lineOn("front", SQUARE[1], SQUARE[2]),
+                lineOn("front", SQUARE[2], SQUARE[3]),
+                lineOn("front", SQUARE[3], SQUARE[0])
+            ]
+            expect(detectBrokenEntities(docOf(...lines)).size).toBe(0)
+        })
+
+        it("clears a loop closed by a mix of an open polyline and a line", () => {
+            const open = polylineOn("front", [SQUARE[0], SQUARE[1], SQUARE[2], SQUARE[3]], false)
+            const closer = lineOn("front", SQUARE[3], SQUARE[0])
+            expect(detectBrokenEntities(docOf(open, closer)).size).toBe(0)
+        })
+
+        it("does not flag a circle — it is not a line", () => {
+            const circleDoc = docOf({ id: id(), type: "circle", center: [0, 0, 0], radius: 20, normal: [0, 0, 1] })
+            expect(detectBrokenEntities(circleDoc).size).toBe(0)
+        })
+    })
+
+    context("geometry that bounds no region is broken", () => {
+        it("flags an open polyline", () => {
+            const open = polylineOn("front", SQUARE, false)
+            expect(detectBrokenEntities(docOf(open)).has(open.id)).toBe(true)
+        })
+
+        it("flags a lone single line", () => {
+            const line = lineOn("front", [0, 0], [40, 0])
+            expect(detectBrokenEntities(docOf(line)).has(line.id)).toBe(true)
+        })
+
+        it("flags a skew entity that lies on no principal plane", () => {
+            const skew: Polyline = {
+                id: id(),
+                type: "polyline",
+                closed: true,
+                points: [
+                    [0, 0, 0],
+                    [40, 0, 0],
+                    [40, 40, 40],
+                    [0, 40, 40]
+                ] as Vec3[]
+            }
+            expect(detectBrokenEntities(docOf(skew)).has(skew.id)).toBe(true)
+        })
+    })
+
+    context("a spur beside a closed polyline flags only the spur", () => {
+        it("leaves the closed square clean and flags just the stray line", () => {
+            const square = polylineOn("front", SQUARE, true)
+            const spur = lineOn("front", SQUARE[0], [-40, -40])
+            const broken = detectBrokenEntities(docOf(square, spur))
+            expect(broken.has(square.id)).toBe(false)
+            expect(broken.has(spur.id)).toBe(true)
+            expect(broken.size).toBe(1)
+        })
+    })
+
+    context("a spur poisoning a loop built from separate lines flags them all", () => {
+        it("flags every line of the line-built square plus the spur", () => {
+            const sides = [
+                lineOn("front", SQUARE[0], SQUARE[1]),
+                lineOn("front", SQUARE[1], SQUARE[2]),
+                lineOn("front", SQUARE[2], SQUARE[3]),
+                lineOn("front", SQUARE[3], SQUARE[0])
+            ]
+            const spur = lineOn("front", SQUARE[0], [-40, -40])
+            const broken = detectBrokenEntities(docOf(...sides, spur))
+            for (const side of sides) {
+                expect(broken.has(side.id)).toBe(true)
+            }
+            expect(broken.has(spur.id)).toBe(true)
+            expect(broken.size).toBe(5)
         })
     })
 })

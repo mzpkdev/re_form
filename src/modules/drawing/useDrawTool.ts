@@ -19,10 +19,14 @@ const samePoint = (a: Vec2, b: Vec2): boolean => a[0] === b[0] && a[1] === b[1]
  *    preview) is constrained to a 0/45/90° ray from its anchor and landed on a
  *    grid intersection (`constrainToAngle`).
  *
- * Two interaction shapes live here:
+ * Three interaction shapes live here:
  *  - **line** is click-drag: pointerdown anchors a (snapped) start point and
  *    seeds a degenerate preview, pointermove rubber-bands the constrained end,
  *    pointerup commits the entity (when non-degenerate) and clears the ghost.
+ *  - **rectangle** is click-drag too, but the two corners define an axis-aligned
+ *    box: the far corner grid-snaps WITHOUT the line's angle lock, and the
+ *    release commits a CLOSED 4-corner polyline (the same shape a hand-drawn box
+ *    would produce — `buildEntity` owns the corner expansion).
  *  - **polyline** is multi-click: each pointerdown appends a (constrained)
  *    vertex, pointermove previews "vertices so far + constrained cursor", and a
  *    double-click (or Enter) commits it OPEN. Once there are ≥3 vertices, clicking
@@ -30,7 +34,7 @@ const samePoint = (a: Vec2, b: Vec2): boolean => a[0] === b[0] && a[1] === b[1]
  *    hook exposes `closeArmed` + `firstVertex` so the canvas can flag that the
  *    next click would close.
  *
- * `select`/`circle`/`arc` and any other tool draw nothing here. The in-progress
+ * `select`/`circle`/`arc` draw nothing here. The in-progress
  * vertex list and drag anchor are LOCAL refs — only the ghost `Entity` ever
  * reaches the store (`setPreview`). Esc cancels; changing the tool or plane
  * mid-draw also cancels (the hook resets when they change). The current grid size
@@ -122,6 +126,16 @@ export const useDrawTool = (
                 return
             }
 
+            // rectangle: click-drag like a line — anchor the snapped first corner,
+            // capture the pointer, seed the ghost. The release commits the polygon.
+            if (activeTool === "rectangle") {
+                event.currentTarget.setPointerCapture?.(event.pointerId)
+                const start = snapToGrid(eventToWorld2D(event), gridSize)
+                dragRef.current = { pointerId: event.pointerId, start }
+                setPreview(buildEntity("rectangle", [start, start], activePlane))
+                return
+            }
+
             if (activeTool !== "line") return
 
             // line: anchor the drag at the snapped start and capture the pointer so
@@ -149,6 +163,16 @@ export const useDrawTool = (
                 return
             }
 
+            // rectangle: rubber-band the far corner (grid-snapped, no angle lock —
+            // a rectangle is not a ray) and preview the live polygon.
+            if (activeTool === "rectangle") {
+                const drag = dragRef.current
+                if (!drag || drag.pointerId !== event.pointerId) return
+                const end = snapToGrid(eventToWorld2D(event), gridSize)
+                setPreview(buildEntity("rectangle", [drag.start, end], activePlane))
+                return
+            }
+
             if (activeTool !== "line") return
             const drag = dragRef.current
             if (!drag || drag.pointerId !== event.pointerId) return
@@ -160,16 +184,21 @@ export const useDrawTool = (
 
     const onPointerUp = useCallback(
         (event: { clientX: number; clientY: number; pointerId: number; currentTarget: Element }) => {
-            // Polyline commits on double-click/Enter, not on a single release.
-            if (activeTool !== "line") return
+            // line and rectangle commit on release; polyline waits for dbl-click/Enter.
+            if (activeTool !== "line" && activeTool !== "rectangle") return
 
             const drag = dragRef.current
             if (!drag || drag.pointerId !== event.pointerId) return
             event.currentTarget.releasePointerCapture?.(event.pointerId)
             dragRef.current = null
 
-            const end = constrainToAngle(drag.start, eventToWorld2D(event), gridSize)
-            const entity = buildEntity("line", [drag.start, end], activePlane)
+            // A line locks its end to a 0/45/90° ray; a rectangle's far corner
+            // grid-snaps freely. Either way `buildEntity` rejects a degenerate drag.
+            const end =
+                activeTool === "rectangle"
+                    ? snapToGrid(eventToWorld2D(event), gridSize)
+                    : constrainToAngle(drag.start, eventToWorld2D(event), gridSize)
+            const entity = buildEntity(activeTool, [drag.start, end], activePlane)
             if (entity) addEntity(entity)
             setPreview(null)
         },
