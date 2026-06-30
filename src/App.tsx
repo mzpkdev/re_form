@@ -7,7 +7,7 @@ import { meshToBufferGeometry } from "./lib/model"
 import { getManifold, setManifold } from "./lib/modelStore"
 import { exportStl, verifyStlDimensions } from "./lib/stl"
 import { AssistantPanel, SettingsView } from "./modules/assistant"
-import { DrawingEditor, drawingToManifold, getDrawing } from "./modules/drawing"
+import { DrawingEditor, drawingToManifold, useDrawing } from "./modules/drawing"
 import { MeshToolsPanel } from "./modules/mesh-tools"
 import { ObfuscatePanel } from "./modules/obfuscate"
 import { Viewport } from "./modules/viewer"
@@ -21,25 +21,28 @@ export const App = () => {
     const [view, setView] = useState<"editor" | "settings" | "draw">("editor")
     const [activePanel, setActivePanel] = useState<"ai" | "mesh" | "obfuscate" | null>(null)
     const [stlFile, setStlFile] = useState<File | null>(null)
+    const drawing = useDrawing()
 
-    // The 3D solid is a DERIVED view of the drawing: on every entry into the
-    // Editor view, re-detect the drawing's closed regions and extrude them into
-    // the live solid the Viewport renders. Recomputed each entry because the
-    // drawing may have changed in the Draw view since last time.
+    // The 3D solid is a DERIVED view of the drawing: re-detect the drawing's
+    // closed regions and extrude them into the live solid the Viewport renders.
+    // Re-runs both on entry into the Editor view AND whenever the document itself
+    // changes (the `drawing` dep) — so an edit made while in the Editor (e.g. the
+    // assistant rewriting the document) re-derives the solid immediately, not
+    // only on the next view round-trip.
     //
     // Race/clobber safety:
-    //   - `cancelled` is flipped by the cleanup, so a rapid Draw↔Editor toggle (or
-    //     leaving the Editor before the WASM promise resolves) drops the stale
-    //     result instead of writing it — only the latest entry's build can win.
-    //   - We `setManifold` only when the build is non-null, so entering the Editor
-    //     with no closed shape leaves an imported STL untouched rather than
-    //     clobbering it with an empty solid.
+    //   - `cancelled` is flipped by the cleanup, so a rapid change (or leaving the
+    //     Editor before the WASM promise resolves) drops the stale result instead
+    //     of writing it — only the latest build can win.
+    //   - We `setManifold` only when the build is non-null, so a document with no
+    //     closed shape leaves an imported STL untouched rather than clobbering it
+    //     with an empty solid.
     useEffect(() => {
         if (view !== "editor") return
         let cancelled = false
         initManifold().then((wasm) => {
             if (cancelled) return
-            const solid = drawingToManifold(wasm, getDrawing())
+            const solid = drawingToManifold(wasm, drawing)
             if (cancelled) {
                 // Lost the race after the build; the handle is ours to free.
                 solid?.delete()
@@ -50,7 +53,7 @@ export const App = () => {
         return () => {
             cancelled = true
         }
-    }, [view])
+    }, [view, drawing])
 
     const handleExport = () => {
         const m = getManifold()

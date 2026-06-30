@@ -2,8 +2,9 @@ import { useMutation } from "@tanstack/react-query"
 import { Bot, Send, User, X } from "lucide-react"
 import { type KeyboardEvent, useEffect, useRef, useState } from "react"
 import { cn } from "../../design/cn"
+import { DRAWING_TOOLS, describeViews, executeDrawingTool } from "./drawingTools"
 import { Markdown } from "./Markdown"
-import { type ChatMessage, streamChat } from "./openrouter"
+import { type ChatMessage, streamChat, type ToolCall } from "./openrouter"
 import { Typewriter } from "./Typewriter"
 import { useApiKey, useBaseUrl, useModel } from "./useApiConfig"
 
@@ -15,11 +16,24 @@ type Message = {
 }
 
 /**
- * A plain conversational assistant: it streams a reply and has no view of, or
- * control over, the model. No editor context is injected and no tools are sent,
- * so a single minimal system line is the only framing.
+ * Standing instructions for the editor-aware assistant. The live drawing is
+ * appended at send time (it changes every turn, including in response to the
+ * model's own tool calls), so the system message is rebuilt per send rather
+ * than held as a constant.
  */
-const SYSTEM_MESSAGE: ChatMessage = { role: "system", content: "You are a helpful assistant." }
+const SYSTEM_INSTRUCTIONS = [
+    "You are the assistant for a technical-drawing CAD tool.",
+    "It builds a 3D solid by INTERSECTING the silhouettes of orthographic views, like a machinist's three-view drawing.",
+    "To create or change geometry, call `set_views` with the closed outline polygons for each view — front, top, and/or side — as 2D [x, y] points in millimetres. Provide at least TWO views, or no solid forms.",
+    "A 50mm cube, for example, is three 50x50 squares (one per view).",
+    "set_views replaces the whole drawing; the current views are shown below."
+].join(" ")
+
+/** Build the system message for a send: standing instructions + the current geometry as per-view polygons. */
+const buildSystemMessage = (): ChatMessage => ({
+    role: "system",
+    content: `${SYSTEM_INSTRUCTIONS}\n\nCurrent views (JSON):\n${describeViews()}`
+})
 
 const formatTime = () => new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
 
@@ -94,19 +108,49 @@ export const AssistantPanel = ({ open, onClose }: { open: boolean; onClose: () =
             const { signal } = controllerRef.current ?? new AbortController()
             const replyId = replyIdRef.current
 
-            for await (const chunk of streamChat({
-                apiKey,
-                baseUrl,
-                model,
-                messages: history,
-                signal,
-                onOpen: () => setThinking(true)
-            })) {
-                // No tools are sent, so only text deltas arrive; append them to the open bubble.
-                if (chunk.type === "text") {
-                    setMessages((prev) =>
-                        prev.map((m) => (m.id === replyId ? { ...m, text: m.text + chunk.value } : m))
-                    )
+            // Agentic loop: each pass streams a completion; if the model asks for
+            // tool calls we execute them, feed the results back as `tool` messages,
+            // and loop so it can react. A pass with no tool calls is terminal.
+            // Eight passes is a runaway backstop, not an expected limit.
+            for (let pass = 0; pass < 8; pass++) {
+                if (signal.aborted) {
+                    return
+                }
+                let passText = ""
+                let calls: ToolCall[] | undefined
+                for await (const chunk of streamChat({
+                    apiKey,
+                    baseUrl,
+                    model,
+                    messages: history,
+                    tools: DRAWING_TOOLS,
+                    signal,
+                    onOpen: () => setThinking(true)
+                })) {
+                    if (chunk.type === "text") {
+                        passText += chunk.value
+                        setMessages((prev) =>
+                            prev.map((m) => (m.id === replyId ? { ...m, text: m.text + chunk.value } : m))
+                        )
+                    } else {
+                        calls = chunk.calls
+                    }
+                }
+
+                // No tool calls — the model gave its final answer this pass.
+                if (!calls) {
+                    return
+                }
+
+                // Record the assistant turn (text + the calls it requested), then
+                // append each tool result so the next pass sees them.
+                history.push({ role: "assistant", content: passText, tool_calls: calls })
+                for (const call of calls) {
+                    history.push({
+                        role: "tool",
+                        tool_call_id: call.id,
+                        content: executeDrawingTool(call.function.name, call.function.arguments)
+                    })
                 }
             }
         },
@@ -150,7 +194,7 @@ export const AssistantPanel = ({ open, onClose }: { open: boolean; onClose: () =
         const userId = nextId.current++
         const replyId = nextId.current++
         const history: ChatMessage[] = [
-            SYSTEM_MESSAGE,
+            buildSystemMessage(),
             ...messages.map((m) => ({ role: m.role, content: m.text })),
             { role: "user", content: userText }
         ]
